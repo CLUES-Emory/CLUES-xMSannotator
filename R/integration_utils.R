@@ -37,7 +37,6 @@ reformat_annotation_table <- function(annotation) {
       Formula = annotation$molecular_formula,
       MonoisotopicMass = annotation$monoisotopic_mass,
       Adduct = if_else(annotation$mass_number_difference == 0, annotation$adduct, construct_adduct_formula(annotation$adduct, annotation$mass_number_difference)),
-      ISgroup = "-", # dummy column due to high complexity of reproducing the values
       mean_int_vec = annotation$mean_intensity,
       MD = as.numeric(sprintf("0.%1.0f", annotation$mass_defect))
     )

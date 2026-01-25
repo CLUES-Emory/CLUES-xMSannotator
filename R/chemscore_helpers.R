@@ -598,7 +598,7 @@ get_data_and_score_for_chemical <- function(cor_mz,
     else {
       mchemicaldata$Module_RTclust <- replace_with_module(mchemicaldata$Module_RTclust)
       mchemicaldata <- cbind(mchemicaldata[, c(2:11)], mchemicaldata[, 1], mchemicaldata[, c(12:14)])
-      colnames(mchemicaldata) <- c("mz", "time", "MatchCategory", "theoretical.mz", "chemical_ID", "Name", "Formula", "MonoisotopicMass", "Adduct", "ISgroup", "Module_RTclust", "time.y", "mean_int_vec", "MD")
+      colnames(mchemicaldata) <- c("mz", "time", "MatchCategory", "theoretical.mz", "chemical_ID", "Name", "Formula", "MonoisotopicMass", "Adduct", "Module_RTclust", "mean_int_vec", "MD")
 
       mchemicaldata <- as.data.frame(mchemicaldata)
       mchemicaldata$time <- as.numeric(as.character(mchemicaldata$time))

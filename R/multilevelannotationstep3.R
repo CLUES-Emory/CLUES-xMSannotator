@@ -248,7 +248,6 @@ multilevelannotationstep3 <- function(chemCompMZ,
     "Formula",
     "MonoisotopicMass",
     "Adduct",
-    "ISgroup",
     "mean_int_vec",
     "MD"
   )
