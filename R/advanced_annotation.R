@@ -146,6 +146,27 @@ advanced_annotation <- function(peak_table,
   )
   # ---------------------------
 
+  # ----------------------------
+  # Summary: Adduct detection results
+  # ----------------------------
+  n_annotations <- nrow(annotation)
+  n_unique_peaks <- length(unique(annotation$peak))
+  n_unique_compounds <- length(unique(annotation$compound))
+
+  cat("\n=== Adduct Detection Summary ===\n")
+  cat(sprintf("Total annotations: %d\n", n_annotations))
+  cat(sprintf("Unique peaks matched: %d\n", n_unique_peaks))
+  cat(sprintf("Unique compounds matched: %d\n", n_unique_compounds))
+
+  adduct_breakdown <- annotation %>%
+    count(adduct) %>%
+    arrange(desc(n))
+
+  cat("\nAdduct breakdown:\n")
+  print(adduct_breakdown, n = 20)
+  cat("=================================\n\n")
+  # ----------------------------
+
   # Output Stage1: Simple annotation results (mass matching)
   # ----------------------------
   stage1_annotation <- annotation
