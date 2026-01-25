@@ -280,6 +280,11 @@ advanced_annotation <- function(peak_table,
     }
   }
 
+  # Create output directory if it doesn't exist
+  if (!dir.exists(outloc)) {
+    dir.create(outloc, recursive = TRUE)
+  }
+
   # Tool 1: Simple annotation
   # ---------------------------
   annotation <- simple_annotation(
