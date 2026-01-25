@@ -34,14 +34,24 @@ get_chemscore <- function(...,
     MplusH.abundance.ratio.check = MplusH.abundance.ratio.check
   )
 
-  if (result$chemical_score >= (-100)) {
-    result$filtdata <- result$filtdata[order(result$filtdata$mz), ]
-    cur_chem_score <- rep_len(result$chemical_score, nrow(result$filtdata))
-    chemscoremat <- cbind(cur_chem_score, result$filtdata)
-    # Remove rows only if critical columns are NA (not isotope-specific columns)
-    # Isotopes have NA in theoretical.mz, Name, MonoisotopicMass - which is expected
-    critical_cols <- c("mz", "time", "chemical_ID", "Adduct")
-    chemscoremat <- chemscoremat[complete.cases(chemscoremat[, critical_cols]), ]
+  # Return NULL if no valid data (pmap_dfr will skip NULL values)
+  if (is.null(result$filtdata) || nrow(result$filtdata) < 1) {
+    return(NULL)
   }
+
+  result$filtdata <- result$filtdata[order(result$filtdata$mz), ]
+  cur_chem_score <- rep_len(result$chemical_score, nrow(result$filtdata))
+  chemscoremat <- cbind(cur_chem_score, result$filtdata)
+
+  # Remove rows only if critical columns are NA (not isotope-specific columns)
+  # Isotopes have NA in theoretical.mz, Name, MonoisotopicMass - which is expected
+  critical_cols <- c("mz", "time", "chemical_ID", "Adduct")
+  chemscoremat <- chemscoremat[complete.cases(chemscoremat[, critical_cols]), ]
+
+  # Return NULL if no rows remain after filtering
+  if (nrow(chemscoremat) < 1) {
+    return(NULL)
+  }
+
   return(chemscoremat)
 }
