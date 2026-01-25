@@ -233,6 +233,16 @@ advanced_annotation <- function(peak_table,
   global_cor <- reformat_correlation_matrix(peak_table, peak_correlation_matrix)
   # ----------------------------
 
+  # Output Stage2: Isotope detection results
+  # ----------------------------
+  stage2_output <- annotation
+  if (!is.null(mz_rt_feature_id_map)) {
+    stage2_output <- left_join(stage2_output, mz_rt_feature_id_map, by = c("mz", "time"))
+  }
+  write.table(stage2_output, file = file.path(outloc, "Stage2_isotope_detection.txt"),
+              sep = "\t", row.names = FALSE)
+  # ----------------------------
+
   # Tool 8: Compute chemscores
   # ----------------------------
   # Get unique chemical_IDs and process each once.
@@ -250,22 +260,10 @@ advanced_annotation <- function(peak_table,
                     corthresh = correlation_threshold,
                     global_cor = global_cor,
                     max_diff_rt = time_tolerance,
-                    filter.by = filter_by,
-                    outlocorig = outloc
+                    filter.by = filter_by
     )
   )
-
-  # Rewrite Stage2 with feature ID column
-  if (!is.null(mz_rt_feature_id_map)) {
-    stage2_file <- file.path(outloc, "Stage2_isotope_detection.txt")
-    if (file.exists(stage2_file)) {
-      stage2_data <- read.table(stage2_file, sep = "\t", header = TRUE)
-      stage2_data <- left_join(stage2_data, mz_rt_feature_id_map, by = c("mz", "time"))
-      write.table(stage2_data, file = stage2_file, sep = "\t", row.names = FALSE)
-    }
-  }
   # ----------------------------
-
 
   # Tool 9: pathway matching
   # ----------------------------

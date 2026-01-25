@@ -11,8 +11,7 @@ get_chemscore <- function(...,
                           adduct_weights,
                           filter.by,
                           mass_defect_window = 0.01,
-                          MplusH.abundance.ratio.check = TRUE,
-                          outlocorig) {
+                          MplusH.abundance.ratio.check = TRUE) {
 
   query <- tibble::tibble(...)
 
