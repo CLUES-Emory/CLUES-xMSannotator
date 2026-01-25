@@ -16,7 +16,10 @@ compute_isotopic_pattern <- function(formula, minAbund = 0.001) {
   isotopes <- get.isotopes.pattern(formula, minAbund)
   isotopes <- as_tibble(isotopes)
   isotopes <- arrange(isotopes, desc(abund))
-  isotopes <- mutate(isotopes, mass_number_difference = round(mass - mass[1]))
+  isotopes <- mutate(isotopes,
+    mass_number_difference = round(mass - mass[1]),
+    exact_mass_diff = mass - mass[1]
+  )
 }
 
 #' Match isotopes from peak table to annotated peaks based on rt cluster, rt difference, and mass defect.
@@ -44,7 +47,9 @@ filter_isotopes <- function(query,
     mass_number_difference = round(mz - query$expected_mass),
     compound = query$compound,
     adduct = query$adduct,
-    molecular_formula = query$molecular_formula
+    molecular_formula = query$molecular_formula,
+    name = if ("name" %in% names(query)) query$name else NA_character_,
+    monoisotopic_mass = if ("monoisotopic_mass" %in% names(query)) query$monoisotopic_mass else NA_real_
   )
   isotopes <- filter(
     isotopes,
@@ -76,14 +81,17 @@ match_isotopes_by_intensity <- function(query,
     relative_intensity = mean_intensity / query$mean_intensity
   )
   isotopes <- left_join(isotopes,
-    select(pattern, mass_number_difference, abund),
+    select(pattern, mass_number_difference, abund, exact_mass_diff),
     by = "mass_number_difference"
   )
   isotopes <- filter(
     isotopes,
     near(relative_intensity, abund, relative_intensity * intensity_deviation_tolerance)
   )
-  isotopes <- select(isotopes, -c(abund, relative_intensity))
+  isotopes <- mutate(isotopes,
+    expected_mass = query$expected_mass + exact_mass_diff
+  )
+  isotopes <- select(isotopes, -c(abund, relative_intensity, exact_mass_diff))
 }
 
 #' Find all possible isotopes of a given annotated peak by filtering peaks based on several criteria
