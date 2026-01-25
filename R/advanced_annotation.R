@@ -184,6 +184,7 @@ advanced_annotation <- function(peak_table,
                                 feature_id_column = NULL,
                                 intensity_deviation_tolerance = 0.1,
                                 mass_tolerance = 5e-6,
+                                isotope_mass_tolerance = NULL,
                                 mass_defect_tolerance = 0.1,
                                 mass_defect_precision = 0.01,
                                 time_tolerance = 10,
@@ -221,6 +222,14 @@ advanced_annotation <- function(peak_table,
 
   if (is.numeric(n_workers) && n_workers > 1) {
     WGCNA::allowWGCNAThreads(n_workers)
+  }
+
+  # Default isotope_mass_tolerance to mass_tolerance if not specified
+  # Convert to ppm (mass_tolerance is in fractional form, e.g., 5e-6 = 5 ppm)
+  if (is.null(isotope_mass_tolerance)) {
+    isotope_mass_tolerance_ppm <- mass_tolerance * 1e6
+  } else {
+    isotope_mass_tolerance_ppm <- isotope_mass_tolerance * 1e6
   }
 
   # Store original peak table to preserve user's feature ID column
@@ -364,7 +373,8 @@ advanced_annotation <- function(peak_table,
     intensity_deviation_tolerance = intensity_deviation_tolerance,
     mass_defect_tolerance = mass_defect_tolerance,
     peak_table = peak_table,
-    rt_tolerance = time_tolerance
+    rt_tolerance = time_tolerance,
+    isotope_mass_tolerance_ppm = isotope_mass_tolerance_ppm
   )
   # ----------------------------
 

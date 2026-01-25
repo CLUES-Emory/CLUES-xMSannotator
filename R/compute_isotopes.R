@@ -69,6 +69,8 @@ filter_isotopes <- function(query,
 #' @param pattern Isotopic pattern of a given molecule as produced by [compute_isotopic_pattern].
 #' @param intensity_deviation_tolerance A numeric threshold by which an intensity ratio of two isotopic peaks may differ
 #'  from their actual abundance ratio.
+#' @param isotope_mass_tolerance_ppm Maximum allowed mass error in ppm between observed and theoretical isotope m/z.
+#'  If NULL, no ppm filter is applied.
 #'
 #' @return A table of matched isotopes.
 #'
@@ -76,7 +78,8 @@ filter_isotopes <- function(query,
 match_isotopes_by_intensity <- function(query,
                                         isotopes,
                                         pattern,
-                                        intensity_deviation_tolerance) {
+                                        intensity_deviation_tolerance,
+                                        isotope_mass_tolerance_ppm = NULL) {
   isotopes <- mutate(isotopes,
     relative_intensity = mean_intensity / query$mean_intensity
   )
@@ -84,14 +87,25 @@ match_isotopes_by_intensity <- function(query,
     select(pattern, mass_number_difference, abund, exact_mass_diff),
     by = "mass_number_difference"
   )
+
+  # Calculate expected isotope mass
+  isotopes <- mutate(isotopes,
+    expected_mass = query$expected_mass + exact_mass_diff,
+    mass_error_ppm = abs(mz - expected_mass) / expected_mass * 1e6
+  )
+
+  # Apply ppm mass accuracy filter if specified
+  if (!is.null(isotope_mass_tolerance_ppm)) {
+    isotopes <- filter(isotopes, mass_error_ppm <= isotope_mass_tolerance_ppm)
+  }
+
+  # Apply intensity ratio filter
   isotopes <- filter(
     isotopes,
     near(relative_intensity, abund, relative_intensity * intensity_deviation_tolerance)
   )
-  isotopes <- mutate(isotopes,
-    expected_mass = query$expected_mass + exact_mass_diff
-  )
-  isotopes <- select(isotopes, -c(abund, relative_intensity, exact_mass_diff))
+
+  isotopes <- select(isotopes, -c(abund, relative_intensity, exact_mass_diff, mass_error_ppm))
 }
 
 #' Find all possible isotopes of a given annotated peak by filtering peaks based on several criteria
@@ -104,6 +118,8 @@ match_isotopes_by_intensity <- function(query,
 #'  of each identified peak.
 #' @param mass_defect_tolerance A number. Maximum difference in mass defect between two peaks of the same compound.
 #' @param rt_tolerance A number. Maximum rt difference for two peaks of the same substance.
+#' @param isotope_mass_tolerance_ppm Maximum allowed mass error in ppm between observed and theoretical isotope m/z.
+#'  If NULL, no ppm filter is applied.
 #'
 #' @return A table with peaks that have been identified as isotopes of a given molecule from the annotation table.
 #'
@@ -113,7 +129,8 @@ detect_isotopic_peaks <- function(...,
                                   intensity_deviation_tolerance,
                                   peaks,
                                   mass_defect_tolerance,
-                                  rt_tolerance) {
+                                  rt_tolerance,
+                                  isotope_mass_tolerance_ppm = NULL) {
   query <- tibble(...)
   isotopic_pattern <- compute_isotopic_pattern(query$molecular_formula)
 
@@ -129,7 +146,8 @@ detect_isotopic_peaks <- function(...,
     query,
     isotopes,
     isotopic_pattern,
-    intensity_deviation_tolerance
+    intensity_deviation_tolerance,
+    isotope_mass_tolerance_ppm
   )
 }
 
@@ -143,6 +161,8 @@ detect_isotopic_peaks <- function(...,
 #' @param peak_table A peak table containing a peak identifier (unique number), mean intensity, module, and rt cluster
 #'  of each identified peak.
 #' @param rt_tolerance A number. Maximum rt difference for two peaks of the same substance.
+#' @param isotope_mass_tolerance_ppm Maximum allowed mass error in ppm between observed and theoretical isotope m/z.
+#'  If NULL, no ppm filter is applied. Recommended: 5-10 ppm for high-resolution MS data.
 #'
 #' @return Annotation table expanded by annotated isotopic peaks.
 #'
@@ -153,7 +173,8 @@ compute_isotopes <- function(annotation,
                              intensity_deviation_tolerance = 0.1,
                              mass_defect_tolerance = 0,
                              peak_table,
-                             rt_tolerance = 1) {
+                             rt_tolerance = 1,
+                             isotope_mass_tolerance_ppm = NULL) {
   annotation <- mutate(annotation, mass_number_difference = 0)
   adducts <- semi_join(annotation, adduct_weights, by = "adduct")
 
@@ -164,7 +185,8 @@ compute_isotopes <- function(annotation,
         peaks = peak_table,
         rt_tolerance = rt_tolerance,
         intensity_deviation_tolerance = intensity_deviation_tolerance,
-        mass_defect_tolerance = mass_defect_tolerance
+        mass_defect_tolerance = mass_defect_tolerance,
+        isotope_mass_tolerance_ppm = isotope_mass_tolerance_ppm
     )
   )
   annotation <- bind_rows(annotation, isotopes)
