@@ -114,9 +114,6 @@ advanced_annotation <- function(peak_table,
     adduct_table = adduct_table,
     mass_tolerance = mass_tolerance
   )
-
-  # this filter is already done in simple_annotation - maybe it can be removed here?
-  annotation <- filter(annotation, forms_valid_adduct_pair(.data$molecular_formula, .data$adduct))
   # ---------------------------
  
   # Tool 2: Compute mass defect
