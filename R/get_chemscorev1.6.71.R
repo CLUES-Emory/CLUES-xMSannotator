@@ -181,7 +181,8 @@ add_isotopic_peaks <- function(mchemicaldata,
                                mass_defect_window,
                                mass_defect_mode,
                                max_isp,
-                               abund_ratio_vec) {
+                               abund_ratio_vec,
+                               outlocorig = NULL) {
   mchemicaldata$Module_RTclust <- replace_with_module(mchemicaldata$Module_RTclust)
 
   adduct_weights_strings <- as.character(adduct_weights[, 1])
@@ -245,7 +246,10 @@ add_isotopic_peaks <- function(mchemicaldata,
 
   mchemicaldata <- unique(plyr::ldply(diffmatB, rbind))
 
-  write.table(mchemicaldata, file = "../Stage2_withisotopes.txt", append = TRUE, sep = "\t", col.names = FALSE)
+  # Write to output directory using absolute path
+  if (!is.null(outlocorig)) {
+    write.table(mchemicaldata, file = file.path(outlocorig, "Stage2_withisotopes.txt"), append = TRUE, sep = "\t", col.names = FALSE)
+  }
   return(mchemicaldata)
 }
 
@@ -917,11 +921,9 @@ get_chemscorev1.6.71 <- function(chemicalid,
                                  mass_defect_window = 0.01,
                                  mass_defect_mode = "pos",
                                  outlocorig) {
-  setwd(outlocorig)
-
-  outloc1 <- paste(outlocorig, "/stage2/", sep = "")
-  suppressWarnings(dir.create(outloc1))
-  setwd(outloc1)
+  # Create stage2 directory using absolute path (no setwd needed)
+  stage2_dir <- file.path(outlocorig, "stage2")
+  suppressWarnings(dir.create(stage2_dir, recursive = TRUE))
 
   if (length(mchemicaldata$mz) < 1) stop("No mz data found!")
 
@@ -934,7 +936,8 @@ get_chemscorev1.6.71 <- function(chemicalid,
     mass_defect_window,
     mass_defect_mode,
     max_isp,
-    abund_ratio_vec
+    abund_ratio_vec,
+    outlocorig = outlocorig
   )
 
   result <- compute_chemical_score(
@@ -947,9 +950,6 @@ get_chemscorev1.6.71 <- function(chemicalid,
     chemicalid,
     MplusH.abundance.ratio.check
   )
-
-  #rm("mzid", "global_cor", "temp_global_cor")
-  setwd("..")
 
   return(result)
 }

@@ -64,7 +64,6 @@ compute_multimatches <- function(mz, curated_res, adduct_weights) {
 multilevelannotationstep5 <- function(outloc,
                                       adduct_weights = NA,
                                       chemscoremat = NA) {
-  setwd(outloc)
   curated_res <- init_chemscoremat(chemscoremat)
 
   adduct_weights <- create_adduct_weights(adduct_weights)
@@ -93,7 +92,7 @@ multilevelannotationstep5 <- function(outloc,
   curated_res$MatchCategory <- rep("Multiple", nrow(curated_res))
   curated_res$MatchCategory[which(curated_res$mz %in% unique_features)] <- "Unique"
 
-  write.csv(curated_res, file = "Stage5.csv", row.names = FALSE)
+  write.csv(curated_res, file = file.path(outloc, "Stage5.csv"), row.names = FALSE)
   remove_tmp_files(outloc)
   return(curated_res)
 }

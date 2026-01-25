@@ -89,19 +89,19 @@ compute_delta_ppm <- function(chemscoremat_with_confidence) {
     return(chemscoremat_with_confidence)
 }
 
-boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs, max.mz.diff, max.rt.diff) {
+boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs, max.mz.diff, max.rt.diff, outloc) {
     cnames_boost <- colnames(boostIDs)
-    
+
     if (length(cnames_boost) > 1) {
         chemscoremat_with_confidence_mzrt <- chemscoremat_with_confidence[, c("mz", "time")]
         validated_mzrt <- boostIDs[, c("mz", "time")]
-        
+
         ghilicpos <- getVenn(chemscoremat_with_confidence_mzrt,
                              name_a = "exp", validated_mzrt, name_b = "boost", mz.thresh = max.mz.diff, time.thresh = max.rt.diff,
-                             alignment.tool = NA, xMSanalyzer.outloc = getwd(), use.unique.mz = FALSE, plotvenn = FALSE
+                             alignment.tool = NA, xMSanalyzer.outloc = outloc, use.unique.mz = FALSE, plotvenn = FALSE
         )
-        
-        save(ghilicpos, file = "ghilicpos.Rda")
+
+        save(ghilicpos, file = file.path(outloc, "ghilicpos.Rda"))
         
         g1 <- ghilicpos$common
         rm(ghilicpos)
@@ -157,8 +157,6 @@ multilevelannotationstep4 <- function(outloc,
                                       boostIDs = NA,
                                       max_isp = 5,
                                       dbAllinf = NA) {
-    setwd(outloc)
-
     chemids <- unique(chemscoremat$chemical_ID)
 
     data(adduct_table)
@@ -189,12 +187,12 @@ multilevelannotationstep4 <- function(outloc,
     
     chemscoremat_with_confidence <- compute_delta_ppm(chemscoremat_with_confidence)
 
-    # (II) Presence of required adducts/forms specified by the user 
+    # (II) Presence of required adducts/forms specified by the user
     # for assignment to high confidence categories (e.g., M + H).
     if (!is.na(boostIDs)) {
-        chemscoremat_with_confidence <- boost_confidence_of_IDs(chemscoremat_with_confidence, boostIDs, max.mz.diff, max.rt.diff)
+        chemscoremat_with_confidence <- boost_confidence_of_IDs(chemscoremat_with_confidence, boostIDs, max.mz.diff, max.rt.diff, outloc)
     }
-    
+
     t2 <- table(chemscoremat_with_confidence$mz)
     uniquemz <- names(which(t2 == 1))
 
@@ -202,7 +200,7 @@ multilevelannotationstep4 <- function(outloc,
     chemscoremat_with_confidence$MatchCategory <- rep("Multiple", dim(chemscoremat_with_confidence)[1])
     chemscoremat_with_confidence$MatchCategory[which(chemscoremat_with_confidence$mz %in% uniquemz)] <- "Unique"
 
-    write.csv(chemscoremat_with_confidence, file = "Stage4.csv", row.names = FALSE)
+    write.csv(chemscoremat_with_confidence, file = file.path(outloc, "Stage4.csv"), row.names = FALSE)
 
     chemscoremat_with_confidence <- as.data.frame(chemscoremat_with_confidence)
     chemscoremat_with_confidence <- chemscoremat_with_confidence[order(chemscoremat_with_confidence$Confidence, decreasing = TRUE), ]

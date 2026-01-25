@@ -15,11 +15,10 @@ get_chemscore <- function(...,
                           outlocorig) {
 
   query <- tibble::tibble(...)
-  setwd(outlocorig)
 
-  outloc1 <- paste(outlocorig, "/stage2/", sep = "")
-  suppressWarnings(dir.create(outloc1))
-  setwd(outloc1)
+  # Create stage2 directory using absolute path (no setwd needed)
+  stage2_dir <- file.path(outlocorig, "stage2")
+  suppressWarnings(dir.create(stage2_dir, recursive = TRUE))
 
   curmchemdata <- dplyr::filter(
     annotation,
@@ -39,8 +38,6 @@ get_chemscore <- function(...,
     chemicalid = query$chemical_ID,
     MplusH.abundance.ratio.check = MplusH.abundance.ratio.check
   )
-
-  setwd("..")
 
   if (result$chemical_score >= (-100)) {
     result$filtdata <- result$filtdata[order(result$filtdata$mz), ]
