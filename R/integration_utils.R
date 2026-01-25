@@ -9,10 +9,10 @@ construct_adduct_formula <- function(formula, mass_number_difference) {
 }
 
 #' Reformat annotation table with isotopes from `main` to be compatible with `master's` chemical score computing.
-#'@param annotation Annotation table after [compute_isotopes()] with columns 
+#'@param annotation Annotation table after [compute_isotopes()] with columns
 #' ['mz', 'rt', 'rt_cluster', 'module', 'multiple_match', 'expected_mass',
 #' 'molecular_formula', 'adduct', 'mass_number_difference', 'monoisotopic_mass',
-#' 'mean_intensity', 'mass_defect']
+#' 'mean_intensity', 'mass_defect', 'compound_id']
 #' @return Reformatted annotation table for use with the `master` branch.
 #' @import dplyr
 #' @importFrom magrittr %>%
@@ -32,7 +32,7 @@ reformat_annotation_table <- function(annotation) {
         !annotation$multiple_match ~ "Unique"
       ),
       theoretical.mz = annotation$expected_mass,
-      chemical_ID = paste("Formula", annotation$compound, sep = "_"),
+      chemical_ID = annotation$compound_id,
       Name = annotation$name,
       Formula = annotation$molecular_formula,
       MonoisotopicMass = annotation$monoisotopic_mass,

@@ -48,15 +48,38 @@ as_adduct_table <- function(data) {
 }
 
 #' Select columns from compound table and ensure data types.
-#' @param data Compound database.
+#' @param data Compound database. Can contain either:
+#'   - `compound_id` (character): User-defined compound identifiers (e.g., "HMDB0000001")
+#'   - `compound` (numeric): Legacy integer compound IDs
+#'   If `compound_id` is provided, an integer `compound` column is auto-generated.
+#'   If only `compound` is provided, `compound_id` is created as "Formula_<compound>".
 #' @return Compound table with required columns and expected types.
 #' @import dplyr
 as_compound_table <- function(data) {
-  required <- c("monoisotopic_mass", "molecular_formula", "compound", "name")
+  has_compound_id <- "compound_id" %in% names(data)
+
+  if (has_compound_id) {
+    # User provided compound_id - validate and auto-generate integer compound
+    stopifnot(is.character(data$compound_id) || is.numeric(data$compound_id))
+    data$compound_id <- as.character(data$compound_id)
+    stopifnot(anyDuplicated(data$compound_id) == 0)
+
+    # Auto-generate integer compound column for internal C++ processing
+    data$compound <- seq_len(nrow(data))
+
+    required <- c("monoisotopic_mass", "molecular_formula", "compound", "compound_id", "name")
+  } else {
+    # Legacy mode: require numeric compound column
+    required <- c("monoisotopic_mass", "molecular_formula", "compound", "name")
+    stopifnot(is.numeric(data$compound))
+    stopifnot(anyDuplicated(data$compound) == 0)
+
+    # Create compound_id from compound for consistency in downstream processing
+    data$compound_id <- paste0("Formula_", data$compound)
+  }
 
   data <- select(data, all_of(required))
 
-  stopifnot(anyDuplicated(data$compound) == 0)
   stopifnot(is.numeric(data$compound))
   stopifnot(is.numeric(data$monoisotopic_mass))
   stopifnot(is.character(data$molecular_formula))
