@@ -106,6 +106,11 @@ advanced_annotation <- function(peak_table,
   # Store original peak table to preserve user's feature ID column
   peak_table_orig <- peak_table
 
+  # Remove feature_id_column before validation (it's non-numeric and would fail validation)
+  if (!is.null(feature_id_column) && feature_id_column %in% colnames(peak_table)) {
+    peak_table <- peak_table[, colnames(peak_table) != feature_id_column, drop = FALSE]
+  }
+
   peak_table <- as_peak_table(peak_table, intensities = TRUE)
   adduct_table <- as_adduct_table(adduct_table)
   compound_table <- as_compound_table(compound_table)
