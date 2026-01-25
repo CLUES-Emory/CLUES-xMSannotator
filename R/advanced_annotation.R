@@ -115,7 +115,14 @@ advanced_annotation <- function(peak_table,
     mass_tolerance = mass_tolerance
   )
   # ---------------------------
- 
+
+  # Output simple annotation results to Stage1
+  # ----------------------------
+  stage1_dir <- file.path(outloc, "Stage1")
+  suppressWarnings(dir.create(stage1_dir, recursive = TRUE))
+  write.csv(annotation, file = file.path(stage1_dir, "Stage1_simple_annotation.csv"), row.names = FALSE)
+  # ----------------------------
+
   # Tool 2: Compute mass defect
   # ----------------------------
   annotation <- compute_mass_defect(annotation, precision = mass_defect_precision)
