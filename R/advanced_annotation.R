@@ -164,6 +164,17 @@ advanced_annotation <- function(peak_table,
     compute_mass_defect(precision = mass_defect_precision)
   # ----------------------------
 
+  # Output Stage1: Peak clustering results
+  # ----------------------------
+  stage1_dir <- file.path(outloc, "Stage1")
+  suppressWarnings(dir.create(stage1_dir, recursive = TRUE))
+
+  stage1_output <- peak_table %>%
+    mutate(Module_RTclust = paste(module, rt_cluster, sep = "_")) %>%
+    select(peak, mz, rt, mean_intensity, module, rt_cluster, Module_RTclust, mass_defect)
+
+  write.csv(stage1_output, file = file.path(stage1_dir, "Stage1_peaks.csv"), row.names = FALSE)
+  # ----------------------------
 
   # Tool 6: Compute isotopes
   # ----------------------------
