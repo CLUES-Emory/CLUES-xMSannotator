@@ -227,6 +227,28 @@ advanced_annotation <- function(peak_table,
   )
   # ----------------------------
 
+  # ----------------------------
+  # Summary: Isotope detection results
+  # ----------------------------
+  n_monoisotopic <- sum(annotation$mass_number_difference == 0)
+  n_isotopes <- sum(annotation$mass_number_difference > 0)
+
+  cat("\n=== Isotope Detection Summary ===\n")
+  cat(sprintf("Monoisotopic peaks: %d\n", n_monoisotopic))
+  cat(sprintf("Isotopes detected:  %d (%.1f%%)\n", n_isotopes, 100 * n_isotopes / nrow(annotation)))
+
+  if (n_isotopes > 0) {
+    isotope_breakdown <- annotation %>%
+      filter(mass_number_difference > 0) %>%
+      count(adduct, mass_number_difference) %>%
+      arrange(adduct, mass_number_difference)
+
+    cat("\nIsotope breakdown by adduct:\n")
+    print(isotope_breakdown, n = 30)
+  }
+  cat("=================================\n\n")
+  # ----------------------------
+
   # Tool 7: Reformat annotation and correlation matrix for old xmsannotator
   # ----------------------------
   annotation <- reformat_annotation_table(annotation)
