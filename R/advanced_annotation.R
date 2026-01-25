@@ -474,6 +474,19 @@ advanced_annotation <- function(peak_table,
   }
   # ----------------------------
 
+  # Output Stage3b: Post-pathway matching results (HMDB mode only)
+  # Note: skip_pathway_step and custom_pathway_step write their own outputs
+  # ----------------------------
+  if (pathway_mode == "HMDB") {
+    stage3b_output <- annotation
+    if (!is.null(mz_rt_feature_id_map)) {
+      stage3b_output <- left_join(stage3b_output, mz_rt_feature_id_map, by = c("mz", "time"))
+    }
+    write.table(stage3b_output, file = file.path(outloc, "Stage3_pathway_matched.txt"),
+                sep = "\t", row.names = FALSE)
+  }
+  # ----------------------------
+
   # Tool 10: compute confidence levels
   # ----------------------------
   annotation <- multilevelannotationstep4(
@@ -487,6 +500,16 @@ advanced_annotation <- function(peak_table,
     min_ions_perchem = min_ions_per_chemical,
     mz_rt_feature_id_map = mz_rt_feature_id_map
   )
+  # ----------------------------
+
+  # Output Stage4: Confidence level results
+  # ----------------------------
+  stage4_output <- annotation
+  if (!is.null(mz_rt_feature_id_map)) {
+    stage4_output <- left_join(stage4_output, mz_rt_feature_id_map, by = c("mz", "time"))
+  }
+  write.table(stage4_output, file = file.path(outloc, "Stage4_confidence_levels.txt"),
+              sep = "\t", row.names = FALSE)
   # ----------------------------
 
   # Tool 11: print confidence distribution
