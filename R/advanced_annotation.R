@@ -66,6 +66,21 @@ print_confidence_distribution <- function(annotation) {
   invisible(annotation)
 }
 
+#' Safely join feature_id column only if it doesn't already exist
+#' @description Prevents duplicate feature_id.x and feature_id.y columns
+#'   when feature_id has already been joined by internal functions.
+#' @param data Data frame to join to
+#' @param feature_id_map Mapping table with mz, time, and feature_id columns
+#' @param feature_id_column Name of the feature_id column
+#' @return Data frame with feature_id column (if not already present)
+#' @import dplyr
+safe_join_feature_id <- function(data, feature_id_map, feature_id_column) {
+  if (is.null(feature_id_map)) return(data)
+  if (is.null(feature_id_column)) return(data)
+  if (feature_id_column %in% names(data)) return(data)  # Already has it
+  left_join(data, feature_id_map, by = c("mz", "time"))
+}
+
 #' Skip pathway matching step
 #' @description Minimal transformation for users who want to skip pathway matching.
 #'   Renames cur_chem_score to score (required by downstream functions) and writes output.
@@ -408,10 +423,7 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage2: Isotope detection results
   # ----------------------------
-  stage2_output <- annotation
-  if (!is.null(mz_rt_feature_id_map)) {
-    stage2_output <- left_join(stage2_output, mz_rt_feature_id_map, by = c("mz", "time"))
-  }
+  stage2_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
   write.table(stage2_output, file = file.path(outloc, "Stage2_isotope_detection.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
@@ -440,10 +452,7 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage3: Chemical score results
   # ----------------------------
-  stage3_output <- annotation
-  if (!is.null(mz_rt_feature_id_map)) {
-    stage3_output <- left_join(stage3_output, mz_rt_feature_id_map, by = c("mz", "time"))
-  }
+  stage3_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
   write.table(stage3_output, file = file.path(outloc, "Stage3_chemical_scores.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
@@ -488,10 +497,7 @@ advanced_annotation <- function(peak_table,
   # Note: skip_pathway_step and custom_pathway_step write their own outputs
   # ----------------------------
   if (pathway_mode == "HMDB") {
-    stage3b_output <- annotation
-    if (!is.null(mz_rt_feature_id_map)) {
-      stage3b_output <- left_join(stage3b_output, mz_rt_feature_id_map, by = c("mz", "time"))
-    }
+    stage3b_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
     write.table(stage3b_output, file = file.path(outloc, "Stage3_pathway_matched.txt"),
                 sep = "\t", row.names = FALSE)
   }
@@ -514,10 +520,7 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage4: Confidence level results
   # ----------------------------
-  stage4_output <- annotation
-  if (!is.null(mz_rt_feature_id_map)) {
-    stage4_output <- left_join(stage4_output, mz_rt_feature_id_map, by = c("mz", "time"))
-  }
+  stage4_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
   write.table(stage4_output, file = file.path(outloc, "Stage4_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
@@ -544,19 +547,14 @@ advanced_annotation <- function(peak_table,
 
     # Output Stage5: Curated results after redundancy filtering
     # ----------------------------
-    stage5_output <- annotation
-    if (!is.null(mz_rt_feature_id_map)) {
-      stage5_output <- left_join(stage5_output, mz_rt_feature_id_map, by = c("mz", "time"))
-    }
+    stage5_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
     write.table(stage5_output, file = file.path(outloc, "Stage5_curated_results.txt"),
                 sep = "\t", row.names = FALSE)
     # ----------------------------
   }
 
   # Join feature ID column to final annotation (for return value)
-  if (!is.null(mz_rt_feature_id_map)) {
-    annotation <- left_join(annotation, mz_rt_feature_id_map, by = c("mz", "time"))
-  }
+  annotation <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
 
   annotation
 }
