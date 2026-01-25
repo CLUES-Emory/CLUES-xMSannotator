@@ -308,6 +308,16 @@ advanced_annotation <- function(peak_table,
   )
   # ----------------------------
 
+  # Output Stage3: Chemical score results
+  # ----------------------------
+  stage3_output <- annotation
+  if (!is.null(mz_rt_feature_id_map)) {
+    stage3_output <- left_join(stage3_output, mz_rt_feature_id_map, by = c("mz", "time"))
+  }
+  write.table(stage3_output, file = file.path(outloc, "Stage3_chemical_scores.txt"),
+              sep = "\t", row.names = FALSE)
+  # ----------------------------
+
   # Tool 9: pathway matching
   # ----------------------------
   data(hmdbCompMZ)
