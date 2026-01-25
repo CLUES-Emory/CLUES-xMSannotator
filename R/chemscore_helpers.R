@@ -1,3 +1,198 @@
+# =============================================================================
+# Helper functions restored from deleted files (needed by compute_chemical_score)
+# =============================================================================
+
+#' Extract module from Module_RTclust string
+#' @param module_rt_clust Module_RTclust string
+#' @return Module portion only
+replace_with_module <- function(module_rt_clust) {
+  gsub(as.character(module_rt_clust), pattern = "_[0-9]*", replacement = "")
+}
+
+#' Group data by retention time using histogram method
+#' @param mchemicaldata Chemical data frame
+#' @param time_step Time step for grouping
+#' @param max_diff_rt Maximum RT difference
+#' @param groupnum Group number prefix
+#' @return Data frame with updated Module_RTclust
+group_by_rt_histv2 <- function(mchemicaldata, time_step = 1, max_diff_rt = 10, groupnum) {
+  range1 <- range(mchemicaldata$time)
+  diff1 <- abs(range1[1] - range1[2])
+
+  if (nrow(mchemicaldata) > 1 && diff1 > 1) {
+    d1 <- try(density(mchemicaldata$time, bw = "nrd", from = min(mchemicaldata$time), to = (max_diff_rt + max(mchemicaldata$time, na.rm = TRUE))), silent = TRUE)
+    if (is(d1, "try-error")) {
+      bw_i <- max_diff_rt
+    } else {
+      bw_i <- d1$bw
+    }
+  } else {
+    bw_i <- max_diff_rt
+  }
+
+  if (bw_i > 6 * max_diff_rt) {
+    hist_inc <- 1 * max_diff_rt
+  } else {
+    hist_inc <- min(bw_i, max_diff_rt)
+  }
+
+  h1 <- hist(mchemicaldata$time, breaks = seq(min(mchemicaldata$time) - max_diff_rt, to = (max_diff_rt + max(mchemicaldata$time)), by = hist_inc), plot = FALSE)
+
+  t1 <- cbind(h1$mids, h1$density)
+  t1 <- as.data.frame(t1)
+  colnames(t1) <- c("mids", "density")
+
+  clusternum <- 1
+  clusterlabels <- {}
+  t1prev <- min(mchemicaldata$time)
+  for (i in 1:dim(t1)[1]) {
+    if (t1[i, 2] == 0 && (t1[i, 1] - t1prev) > max_diff_rt) {
+      clusternum <- clusternum + 1
+    }
+
+    if (t1[i, 2] > 0) {
+      clusterlabels <- c(clusterlabels, clusternum)
+    } else {
+      clusterlabels <- c(clusterlabels, 0)
+    }
+  }
+  t2 <- cbind(t1, clusterlabels)
+  t2 <- as.data.frame(t2)
+  if (length(which(t2[, 3] == 0)) > 0) {
+    t2 <- t2[-which(t2[, 3] == 0), ]
+  }
+  t2[1, 1] <- min(mchemicaldata$time)
+  clusterlabels3 <- lapply(1:length(mchemicaldata$time), function(k) {
+    cl1 <- t2$clusterlabels[which(abs(t2$mids - mchemicaldata$time[k]) == min(abs(t2$mids - mchemicaldata$time[k])))[1]]
+    return(cl1)
+  })
+  clusterlabels3 <- unlist(clusterlabels3)
+  clusterlabels3 <- replace(clusterlabels3, which(is.na(clusterlabels3) == TRUE), 0)
+
+  levelBnum <- paste(groupnum, clusterlabels3, sep = "_")
+  diffmatB <- cbind(levelBnum, mchemicaldata[, -c(11)])
+  diffmatB <- as.data.frame(diffmatB)
+
+  cnames <- colnames(diffmatB)
+  cnames[1] <- "Module_RTclust"
+  colnames(diffmatB) <- cnames
+
+  return(diffmatB)
+}
+
+#' Get confidence level for stage 2
+#' @param curdata Current data frame
+#' @param adduct_weights Adduct weights
+#' @param max_diff_rt Maximum RT difference
+#' @return Confidence score level (0-3)
+get_confidence_stage2 <- function(curdata, adduct_weights = NA, max_diff_rt = 10) {
+  curdata <- curdata[order(curdata$Adduct), ]
+  cur_adducts_with_isotopes <- curdata$Adduct
+  cur_adducts <- gsub(cur_adducts_with_isotopes, pattern = "(_\\[(\\+|\\-)[0-9]*\\])", replacement = "")
+
+  data(adduct_table)
+  if (anyNA(adduct_weights)) {
+    adduct_weights1 <- matrix(nrow = 2, ncol = 2, 0)
+    adduct_weights1[1, ] <- c("M+H", 1)
+    adduct_weights1[2, ] <- c("M-H", 1)
+    adduct_weights <- as.data.frame(adduct_weights1)
+    colnames(adduct_weights) <- c("Adduct", "Weight")
+  }
+  adduct_table <- adduct_table[order(adduct_table$Adduct), ]
+
+  curdata <- cbind(curdata, cur_adducts)
+  curdata <- merge(curdata, adduct_table, by.x = "cur_adducts", by.y = "Adduct")
+  curdata <- curdata[, -c(1)]
+
+  formula_vec <- curdata$Formula
+  table_modules <- table(curdata$Module_RTclust)
+  module_names <- names(table_modules[which(table_modules > 0)])
+
+  chemscoremat_conf_levels <- "High"
+
+  if (length(which(adduct_table$Adduct %in% cur_adducts)) < 1) {
+    return("0")
+  }
+
+  curdata$time <- as.numeric(as.character(curdata$time))
+  delta_rt <- max(curdata$time) - min(curdata$time)
+  delta_rt <- round(delta_rt)
+
+  if ((delta_rt > max_diff_rt) && length(module_names) < 2) {
+    chemscoremat_conf_levels <- "Medium"
+  } else {
+    if ((delta_rt > max_diff_rt) && length(module_names) > 1) {
+      chemscoremat_conf_levels <- "None"
+    } else {
+      if (length(module_names) > 1) {
+        chemscoremat_conf_levels <- "Low"
+      }
+    }
+  }
+
+  if (nrow(curdata) < 2) {
+    if (length(which(cur_adducts %in% adduct_weights[, 1])) < 1) {
+      chemscoremat_conf_levels <- "None"
+    } else {
+      chemscoremat_conf_levels <- "Low"
+    }
+  } else {
+    min_nummol <- min(curdata$num_molecules)
+    if (min_nummol > 1) {
+      chemscoremat_conf_levels <- "Low"
+    } else {
+      check2 <- gregexpr(text = cur_adducts_with_isotopes, pattern = "(_\\[(\\+|\\-)[0-9]*\\])")
+      if (length(check2) > 0) {
+        for (a1 in 1:length(check2)) {
+          strlength <- attr(check2[[a1]], "match.length")
+          if (strlength[1] > (-1)) {
+            count_abundant_form <- length(which(cur_adducts %in% cur_adducts[a1]))
+            if (count_abundant_form < 2) {
+              chemscoremat_conf_levels <- "None"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  curformula <- as.character(formula_vec[1])
+  curformula <- gsub(curformula, pattern = "Ca", replacement = "")
+  curformula <- gsub(curformula, pattern = "Cl", replacement = "")
+  curformula <- gsub(curformula, pattern = "Cd", replacement = "")
+  curformula <- gsub(curformula, pattern = "Cr", replacement = "")
+  curformula <- gsub(curformula, pattern = "Se", replacement = "")
+
+  numcarbons <- check_element(curformula, "C")
+  if (numcarbons < 1) {
+    chemscoremat_conf_levels <- "None"
+  }
+
+  if (nrow(curdata) < 2) {
+    if (length(which(cur_adducts %in% adduct_weights[, 1])) < 1) {
+      chemscoremat_conf_levels <- "None"
+    } else {
+      chemscoremat_conf_levels <- "Low"
+    }
+  }
+
+  if (nrow(curdata) < 1) {
+    score_level <- 0
+  } else {
+    score_level <- as.character(chemscoremat_conf_levels)
+    score_level <- gsub(score_level, pattern = "High", replacement = "3")
+    score_level <- gsub(score_level, pattern = "Medium", replacement = "2")
+    score_level <- gsub(score_level, pattern = "Low", replacement = "1")
+    score_level <- gsub(score_level, pattern = "None", replacement = "0")
+  }
+
+  return(score_level)
+}
+
+# =============================================================================
+# Chemical scoring helper functions
+# =============================================================================
+
 compute_score <- function(adduct_weights, cur_adducts_with_isotopes) {
   score <- 1 * (10^max(as.numeric(as.character(adduct_weights[which(adduct_weights[, 1] %in% cur_adducts_with_isotopes), 2]))))
   return(score[1])
@@ -51,7 +246,6 @@ add_isotopic_peaks <- function(mchemicaldata,
   # water check
   if (nrow(mchemicaldata) < 1) {
     chemical_score <- (-100)
-    browser()
     return(list("chemical_score" = chemical_score, "filtdata" = mchemicaldata))
   }
   mchemicaldata$Adduct <- as.character(mchemicaldata$Adduct)
@@ -160,7 +354,6 @@ calc_base_score <- function(cur_adducts_with_isotopes, adduct_weights, topquant_
 }
 
 calc_base_score_v2 <- function(cur_adducts_with_isotopes, adduct_weights, topquant_cor) {
-  browser()
   cur_adducts <- gsub(cur_adducts_with_isotopes, pattern = "(_\\[(\\+|\\-)[0-9]*\\])", replacement = "")
 
   good_adducts_len <- length(which(cur_adducts_with_isotopes %in% adduct_weights[, 1]))
