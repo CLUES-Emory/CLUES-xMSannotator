@@ -332,26 +332,6 @@ get_confidence_stage4 <-function(curdata,
     }
 
     final_res <- as.data.frame(final_res)
-    
-    rm(
-      list = c(
-        "curdata_all",
-        "cur_adducts_with_isotopes",
-        "cur_adducts",
-        "adduct_monoisot",
-        "curdata",
-        "temp_curdata",
-        "table_modules",
-        "chemscoremat_conf_levels",
-        "score_level",
-        "groupB",
-        "good_mod",
-        "module_clust",
-        "uniq_adducts",
-        "num_good_adducts",
-        "num_uniq_adducts"
-      )
-    )
-    
+
     return(final_res)
   }
