@@ -139,3 +139,22 @@ create_adduct_weights <- function(adduct_weights, weight = 1) {
   }
   return(adduct_weights)
 }
+
+#' Validate pathway table format
+#' @param data Pathway data frame with compound-pathway mappings
+#' @return Validated pathway table with required columns
+#' @import dplyr
+#' @export
+as_pathway_table <- function(data) {
+  required <- c("compound", "pathway")
+
+  if (!all(required %in% colnames(data))) {
+    stop(paste("pathway_data must contain columns:", paste(required, collapse = ", ")))
+  }
+
+  data <- select(data, all_of(required), everything())
+  data$compound <- as.character(data$compound)
+  data$pathway <- as.character(data$pathway)
+
+  return(data)
+}

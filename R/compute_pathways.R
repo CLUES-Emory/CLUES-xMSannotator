@@ -110,6 +110,7 @@ update_pathway_scores <- function (annotations, pathways) {
 #'
 #' @param annotations Table with feature annotations
 #' @param pathways Database of pathways to check for matching annotations
+#' @param adduct_weights Adduct weights table for filtering valid adducts
 #' @param exluded_pathways Pathways that are excluded from the matching
 #' @param exluded_pathway_compounds Compounds which should be excluded from pathway analysis
 #' @param score_threshold Score threshold to use to filter annotations
@@ -118,6 +119,7 @@ update_pathway_scores <- function (annotations, pathways) {
 compute_pathways <- function(
   annotations,
   pathways,
+  adduct_weights,
   exluded_pathways = NULL,
   exluded_pathway_compounds = NULL,
   score_threshold = 0.1
