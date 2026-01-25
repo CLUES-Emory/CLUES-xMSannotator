@@ -185,8 +185,15 @@ advanced_annotation <- function(peak_table,
 
   # Tool 8: Compute chemscores
   # ----------------------------
+  # Get unique chemical_IDs and process each once.
+  # NOTE: distinct() only controls how many times get_chemscore is CALLED.
+  # Inside get_chemscore, it queries the FULL annotation table for all rows
+  # with that chemical_ID, so ALL adducts are preserved.
+  unique_chemicals <- annotation %>%
+    dplyr::distinct(chemical_ID, .keep_all = TRUE)
+
   annotation <- purrr::pmap_dfr(
-    annotation,
+    unique_chemicals,
     ~ get_chemscore(...,
                     annotation = annotation,
                     adduct_weights = adduct_weights,

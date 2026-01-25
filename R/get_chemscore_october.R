@@ -46,7 +46,10 @@ get_chemscore <- function(...,
     result$filtdata <- result$filtdata[order(result$filtdata$mz), ]
     cur_chem_score <- rep_len(result$chemical_score, nrow(result$filtdata))
     chemscoremat <- cbind(cur_chem_score, result$filtdata)
-    chemscoremat <- as.data.frame(na.omit(chemscoremat))
+    # Remove rows only if critical columns are NA (not isotope-specific columns)
+    # Isotopes have NA in theoretical.mz, Name, MonoisotopicMass - which is expected
+    critical_cols <- c("mz", "time", "chemical_ID", "Adduct")
+    chemscoremat <- chemscoremat[complete.cases(chemscoremat[, critical_cols]), ]
   }
   return(chemscoremat)
 }
