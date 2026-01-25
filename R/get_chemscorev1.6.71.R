@@ -246,9 +246,9 @@ add_isotopic_peaks <- function(mchemicaldata,
 
   mchemicaldata <- unique(plyr::ldply(diffmatB, rbind))
 
-  # Write to output directory using absolute path
+  # Write Stage2: Isotope detection results
   if (!is.null(outlocorig)) {
-    write.table(mchemicaldata, file = file.path(outlocorig, "Stage2_withisotopes.txt"), append = TRUE, sep = "\t", col.names = FALSE)
+    write.table(mchemicaldata, file = file.path(outlocorig, "Stage2_isotope_detection.txt"), append = TRUE, sep = "\t", col.names = FALSE)
   }
   return(mchemicaldata)
 }
@@ -921,10 +921,6 @@ get_chemscorev1.6.71 <- function(chemicalid,
                                  mass_defect_window = 0.01,
                                  mass_defect_mode = "pos",
                                  outlocorig) {
-  # Create stage2 directory using absolute path (no setwd needed)
-  stage2_dir <- file.path(outlocorig, "stage2")
-  suppressWarnings(dir.create(stage2_dir, recursive = TRUE))
-
   if (length(mchemicaldata$mz) < 1) stop("No mz data found!")
 
   mchemicaldata <- add_isotopic_peaks(

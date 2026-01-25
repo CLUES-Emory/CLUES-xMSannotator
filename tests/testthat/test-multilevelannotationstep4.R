@@ -35,7 +35,7 @@ patrick::with_parameters_test_that(
       max_isp = max_isp,
       min_ions_perchem = min_ions_perchem
     )
-    actual <- read.csv(file.path(outloc, "Stage4.csv"))
+    actual <- read.table(file.path(outloc, "Stage4_confidence_levels.txt"), sep = "\t", header = TRUE)
 
     setwd(testthat_wd)
 

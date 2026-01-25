@@ -23,7 +23,7 @@ patrick::with_parameters_test_that("basic advanced_annotation functionality", {
     outloc = outloc
   )
 
-  actual <- read.csv(file.path(outloc, "Stage5.csv"))
+  actual <- read.table(file.path(outloc, "Stage5_curated_results.txt"), sep = "\t", header = TRUE)
   setwd(testthat_wd)
 
   expect_equal(actual, expected)

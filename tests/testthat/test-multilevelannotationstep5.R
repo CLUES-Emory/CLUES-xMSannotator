@@ -12,10 +12,9 @@ patrick::with_parameters_test_that(
 
     outloc <- file.path(tempdir(), "multilevelannotationstep5", subfolder)
     dir.create(outloc, recursive = TRUE)
-    file.copy(
-      file.path(testdata_dir, "Stage4.csv"),
-      file.path(outloc, "Stage4.csv")
-    )
+    # Copy Stage4 data and convert to new format for the test
+    stage4_data <- read.csv(file.path(testdata_dir, "Stage4.csv"))
+    write.table(stage4_data, file.path(outloc, "Stage4_confidence_levels.txt"), sep = "\t", row.names = FALSE)
     expected <- read.csv(file.path(testdata_dir, "Stage5.csv"))
 
 
@@ -23,7 +22,7 @@ patrick::with_parameters_test_that(
       outloc = outloc,
       adduct_weights = adduct_weights)
 
-    actual <- read.csv(file.path(outloc, "Stage5.csv"))
+    actual <- read.table(file.path(outloc, "Stage5_curated_results.txt"), sep = "\t", header = TRUE)
     setwd(testthat_wd)
 
     actual <- dplyr::arrange_all(actual)

@@ -116,11 +116,9 @@ advanced_annotation <- function(peak_table,
   )
   # ---------------------------
 
-  # Output simple annotation results to Stage1
+  # Output Stage1: Simple annotation results (mass matching)
   # ----------------------------
-  stage1_dir <- file.path(outloc, "Stage1")
-  suppressWarnings(dir.create(stage1_dir, recursive = TRUE))
-  write.csv(annotation, file = file.path(stage1_dir, "Stage1_simple_annotation.csv"), row.names = FALSE)
+  write.table(annotation, file = file.path(outloc, "Stage1_mass_matched.txt"), sep = "\t", row.names = FALSE)
   # ----------------------------
 
   # Tool 2: Compute mass defect
@@ -173,14 +171,11 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage1: Peak clustering results
   # ----------------------------
-  stage1_dir <- file.path(outloc, "Stage1")
-  suppressWarnings(dir.create(stage1_dir, recursive = TRUE))
-
   stage1_output <- peak_table %>%
     mutate(Module_RTclust = paste(module, rt_cluster, sep = "_")) %>%
     select(peak, mz, rt, mean_intensity, module, rt_cluster, Module_RTclust, mass_defect)
 
-  write.csv(stage1_output, file = file.path(stage1_dir, "Stage1_peaks.csv"), row.names = FALSE)
+  write.table(stage1_output, file = file.path(outloc, "Stage1_peak_clusters.txt"), sep = "\t", row.names = FALSE)
   # ----------------------------
 
   # Tool 6: Compute isotopes
@@ -236,7 +231,8 @@ advanced_annotation <- function(peak_table,
     adduct_weights = adduct_weights,
     db_name = "HMDB",
     max_diff_rt = time_tolerance,
-    pathwaycheckmode = "pm"
+    pathwaycheckmode = "pm",
+    outloc = outloc
   )
   # ----------------------------
 

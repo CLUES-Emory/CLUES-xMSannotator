@@ -64,11 +64,6 @@ patrick::with_parameters_test_that(
       mismatchCount = 1000
     )
 
-    # Annihilate
-    setwd(outloc)
-    unlink("stage2", recursive = TRUE)
-    setwd(testthat_wd)
-
     # Assert
     expect_equal(actual, expected)
 

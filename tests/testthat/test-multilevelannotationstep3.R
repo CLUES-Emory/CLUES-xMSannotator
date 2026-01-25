@@ -33,10 +33,11 @@ patrick::with_parameters_test_that(
       adduct_weights = adduct_weights,
       db_name = db_name,
       max_diff_rt = max_diff_rt,
-      pathwaycheckmode = pathwaycheckmode
+      pathwaycheckmode = pathwaycheckmode,
+      outloc = outloc
     )
 
-    actual <- read.csv(file.path(outloc, "Stage3.csv"))
+    actual <- read.table(file.path(outloc, "Stage3_correlation_scores.txt"), sep = "\t", header = TRUE)
 
     setwd(testthat_wd)
 

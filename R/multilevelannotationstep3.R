@@ -230,7 +230,8 @@ multilevelannotationstep3 <- function(chemCompMZ,
                                       db_name,
                                       max_diff_rt,
                                       pathwaycheckmode = "p",
-                                      scorethresh = 0.1) {
+                                      scorethresh = 0.1,
+                                      outloc = tempdir()) {
   adduct_weights <- create_adduct_weights(adduct_weights)
 
   column_names <- c(
@@ -286,7 +287,7 @@ multilevelannotationstep3 <- function(chemCompMZ,
     chemscoremat <- chemscoremat[, column_names]
   }
 
-  write.csv(chemscoremat, file = "Stage3.csv", row.names = FALSE)
+  write.table(chemscoremat, file = file.path(outloc, "Stage3_correlation_scores.txt"), sep = "\t", row.names = FALSE)
 
   return(chemscoremat)
 }

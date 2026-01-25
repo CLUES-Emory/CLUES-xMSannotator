@@ -1,6 +1,6 @@
-init_chemscoremat <- function(chemscoremat) {
+init_chemscoremat <- function(chemscoremat, outloc = tempdir()) {
   if (any(is.na(chemscoremat))) {
-    chemscoremat <- read.csv("Stage4.csv")
+    chemscoremat <- read.table(file.path(outloc, "Stage4_confidence_levels.txt"), sep = "\t", header = TRUE)
   }
   chemscoremat <- as.data.frame(chemscoremat)
   chemscoremat$mz <- as.numeric(chemscoremat$mz)
@@ -31,21 +31,6 @@ get_features <- function(mz, match) {
   return(features)
 }
 
-remove_tmp_files <- function(loc) {
-  fname <- paste("Stage5_annotation_results", sep = "")
-  unlink(fname)
-  suppressWarnings(unlink("*.Rda"))
-
-  for (file in c("/stage2/", "/stage3/", "/stage4/", "/stage5/")) {
-    loc <- paste(loc, file, sep = "")
-    unlink(loc, force = TRUE, recursive = TRUE)
-  }
-
-  for (file in c("step1_results.Rda", "plot.pdf", "Rplots.pdf", "Rplots.pdf")) {
-    try(unlink(file), silent = TRUE)
-  }
-}
-
 compute_multimatches <- function(mz, curated_res, adduct_weights) {
   multimatches_idx <- which(curated_res$mz %in% mz)
   multimatch_features <- increase_multimatches_score(curated_res[multimatches_idx, ], adduct_weights)
@@ -64,7 +49,7 @@ compute_multimatches <- function(mz, curated_res, adduct_weights) {
 multilevelannotationstep5 <- function(outloc,
                                       adduct_weights = NA,
                                       chemscoremat = NA) {
-  curated_res <- init_chemscoremat(chemscoremat)
+  curated_res <- init_chemscoremat(chemscoremat, outloc)
 
   adduct_weights <- create_adduct_weights(adduct_weights)
 
@@ -92,7 +77,6 @@ multilevelannotationstep5 <- function(outloc,
   curated_res$MatchCategory <- rep("Multiple", nrow(curated_res))
   curated_res$MatchCategory[which(curated_res$mz %in% unique_features)] <- "Unique"
 
-  write.csv(curated_res, file = file.path(outloc, "Stage5.csv"), row.names = FALSE)
-  remove_tmp_files(outloc)
+  write.table(curated_res, file = file.path(outloc, "Stage5_curated_results.txt"), sep = "\t", row.names = FALSE)
   return(curated_res)
 }

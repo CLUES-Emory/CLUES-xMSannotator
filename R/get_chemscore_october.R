@@ -16,10 +16,6 @@ get_chemscore <- function(...,
 
   query <- tibble::tibble(...)
 
-  # Create stage2 directory using absolute path (no setwd needed)
-  stage2_dir <- file.path(outlocorig, "stage2")
-  suppressWarnings(dir.create(stage2_dir, recursive = TRUE))
-
   curmchemdata <- dplyr::filter(
     annotation,
     chemical_ID == query$chemical_ID &
