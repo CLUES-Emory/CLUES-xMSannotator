@@ -531,15 +531,21 @@ advanced_annotation <- function(peak_table,
     # ----------------------------
     print_confidence_distribution(annotation)
     # ----------------------------
+
+    # Output Stage5: Curated results after redundancy filtering
+    # ----------------------------
+    stage5_output <- annotation
+    if (!is.null(mz_rt_feature_id_map)) {
+      stage5_output <- left_join(stage5_output, mz_rt_feature_id_map, by = c("mz", "time"))
+    }
+    write.table(stage5_output, file = file.path(outloc, "Stage5_curated_results.txt"),
+                sep = "\t", row.names = FALSE)
+    # ----------------------------
   }
 
-  # Join feature ID column to final annotation
+  # Join feature ID column to final annotation (for return value)
   if (!is.null(mz_rt_feature_id_map)) {
     annotation <- left_join(annotation, mz_rt_feature_id_map, by = c("mz", "time"))
-    # Re-write Stage5 output with feature ID column included
-    if (redundancy_filtering) {
-      write.table(annotation, file = file.path(outloc, "Stage5_curated_results.txt"), sep = "\t", row.names = FALSE)
-    }
   }
 
   annotation
