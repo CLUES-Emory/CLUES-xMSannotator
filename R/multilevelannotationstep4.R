@@ -147,6 +147,7 @@ boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs, max.
 }
 
 #' @importFrom foreach foreach %do% %dopar%
+#' @importFrom dplyr left_join
 multilevelannotationstep4 <- function(outloc,
                                       chemscoremat,
                                       max.mz.diff = 5,
@@ -156,7 +157,8 @@ multilevelannotationstep4 <- function(outloc,
                                       min_ions_perchem = 1,
                                       boostIDs = NA,
                                       max_isp = 5,
-                                      dbAllinf = NA) {
+                                      dbAllinf = NA,
+                                      mz_rt_feature_id_map = NULL) {
     chemids <- unique(chemscoremat$chemical_ID)
 
     data(adduct_table)
@@ -199,6 +201,11 @@ multilevelannotationstep4 <- function(outloc,
     # assign match category
     chemscoremat_with_confidence$MatchCategory <- rep("Multiple", dim(chemscoremat_with_confidence)[1])
     chemscoremat_with_confidence$MatchCategory[which(chemscoremat_with_confidence$mz %in% uniquemz)] <- "Unique"
+
+    # Join feature ID column if mapping provided
+    if (!is.null(mz_rt_feature_id_map)) {
+        chemscoremat_with_confidence <- left_join(chemscoremat_with_confidence, mz_rt_feature_id_map, by = c("mz", "time"))
+    }
 
     write.table(chemscoremat_with_confidence, file = file.path(outloc, "Stage4_confidence_levels.txt"), sep = "\t", row.names = FALSE)
 

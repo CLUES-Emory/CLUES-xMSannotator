@@ -74,6 +74,7 @@ advanced_annotation <- function(peak_table,
                                 compound_table,
                                 adduct_table = NULL,
                                 adduct_weights = NULL,
+                                feature_id_column = NULL,
                                 intensity_deviation_tolerance = 0.1,
                                 mass_tolerance = 5e-6,
                                 mass_defect_tolerance = 0.1,
@@ -102,9 +103,33 @@ advanced_annotation <- function(peak_table,
     WGCNA::allowWGCNAThreads(n_workers)
   }
 
+  # Store original peak table to preserve user's feature ID column
+  peak_table_orig <- peak_table
+
   peak_table <- as_peak_table(peak_table, intensities = TRUE)
   adduct_table <- as_adduct_table(adduct_table)
   compound_table <- as_compound_table(compound_table)
+
+  # Create feature ID mapping if user specified a column
+  feature_id_map <- NULL
+  mz_rt_feature_id_map <- NULL
+  if (!is.null(feature_id_column)) {
+    if (!feature_id_column %in% colnames(peak_table_orig)) {
+      warning(paste("feature_id_column", feature_id_column, "not found in peak_table"))
+    } else {
+      # Map by peak (for Stage 1 outputs before reformat)
+      feature_id_map <- tibble(
+        peak = peak_table$peak,
+        !!feature_id_column := peak_table_orig[[feature_id_column]]
+      )
+      # Map by mz + time (for downstream stages where peak column is lost)
+      mz_rt_feature_id_map <- tibble(
+        mz = peak_table$mz,
+        time = peak_table$rt,
+        !!feature_id_column := peak_table_orig[[feature_id_column]]
+      )
+    }
+  }
 
   # Tool 1: Simple annotation
   # ---------------------------
@@ -118,7 +143,11 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage1: Simple annotation results (mass matching)
   # ----------------------------
-  write.table(annotation, file = file.path(outloc, "Stage1_mass_matched.txt"), sep = "\t", row.names = FALSE)
+  stage1_annotation <- annotation
+  if (!is.null(feature_id_map)) {
+    stage1_annotation <- left_join(stage1_annotation, feature_id_map, by = "peak")
+  }
+  write.table(stage1_annotation, file = file.path(outloc, "Stage1_mass_matched.txt"), sep = "\t", row.names = FALSE)
   # ----------------------------
 
   # Tool 2: Compute mass defect
@@ -175,6 +204,9 @@ advanced_annotation <- function(peak_table,
     mutate(Module_RTclust = paste(module, rt_cluster, sep = "_")) %>%
     select(peak, mz, rt, mean_intensity, module, rt_cluster, Module_RTclust, mass_defect)
 
+  if (!is.null(feature_id_map)) {
+    stage1_output <- left_join(stage1_output, feature_id_map, by = "peak")
+  }
   write.table(stage1_output, file = file.path(outloc, "Stage1_peak_clusters.txt"), sep = "\t", row.names = FALSE)
   # ----------------------------
 
@@ -217,6 +249,16 @@ advanced_annotation <- function(peak_table,
                     outlocorig = outloc
     )
   )
+
+  # Rewrite Stage2 with feature ID column
+  if (!is.null(mz_rt_feature_id_map)) {
+    stage2_file <- file.path(outloc, "Stage2_isotope_detection.txt")
+    if (file.exists(stage2_file)) {
+      stage2_data <- read.table(stage2_file, sep = "\t", header = TRUE)
+      stage2_data <- left_join(stage2_data, mz_rt_feature_id_map, by = c("mz", "time"))
+      write.table(stage2_data, file = stage2_file, sep = "\t", row.names = FALSE)
+    }
+  }
   # ----------------------------
 
 
@@ -232,7 +274,8 @@ advanced_annotation <- function(peak_table,
     db_name = "HMDB",
     max_diff_rt = time_tolerance,
     pathwaycheckmode = "pm",
-    outloc = outloc
+    outloc = outloc,
+    mz_rt_feature_id_map = mz_rt_feature_id_map
   )
   # ----------------------------
 
@@ -246,7 +289,8 @@ advanced_annotation <- function(peak_table,
     filter.by = filter_by,
     adduct_weights = adduct_weights,
     max_isp = maximum_isotopes,
-    min_ions_perchem = min_ions_per_chemical
+    min_ions_perchem = min_ions_per_chemical,
+    mz_rt_feature_id_map = mz_rt_feature_id_map
   )
   # ----------------------------
 
@@ -264,11 +308,20 @@ advanced_annotation <- function(peak_table,
       chemscoremat = annotation
     )
     # ----------------------------
-    
+
     # Re-use the confidence distrivution printing tool
     # ----------------------------
     print_confidence_distribution(annotation)
     # ----------------------------
+  }
+
+  # Join feature ID column to final annotation
+  if (!is.null(mz_rt_feature_id_map)) {
+    annotation <- left_join(annotation, mz_rt_feature_id_map, by = c("mz", "time"))
+    # Re-write Stage5 output with feature ID column included
+    if (redundancy_filtering) {
+      write.table(annotation, file = file.path(outloc, "Stage5_curated_results.txt"), sep = "\t", row.names = FALSE)
+    }
   }
 
   annotation

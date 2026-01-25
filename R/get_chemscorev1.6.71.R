@@ -248,7 +248,10 @@ add_isotopic_peaks <- function(mchemicaldata,
 
   # Write Stage2: Isotope detection results
   if (!is.null(outlocorig)) {
-    write.table(mchemicaldata, file = file.path(outlocorig, "Stage2_isotope_detection.txt"), append = TRUE, sep = "\t", col.names = FALSE)
+    stage2_file <- file.path(outlocorig, "Stage2_isotope_detection.txt")
+    append_mode <- file.exists(stage2_file)
+    write.table(mchemicaldata, file = stage2_file, append = append_mode,
+                sep = "\t", row.names = FALSE, col.names = !append_mode)
   }
   return(mchemicaldata)
 }

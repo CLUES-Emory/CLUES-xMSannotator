@@ -224,6 +224,7 @@ sanitize_chemscoremat <- function(chemscoremat, chemCompMZ, column_names) {
 }
 
 
+#' @importFrom dplyr left_join
 multilevelannotationstep3 <- function(chemCompMZ,
                                       chemscoremat,
                                       adduct_weights = NA,
@@ -231,7 +232,8 @@ multilevelannotationstep3 <- function(chemCompMZ,
                                       max_diff_rt,
                                       pathwaycheckmode = "p",
                                       scorethresh = 0.1,
-                                      outloc = tempdir()) {
+                                      outloc = tempdir(),
+                                      mz_rt_feature_id_map = NULL) {
   adduct_weights <- create_adduct_weights(adduct_weights)
 
   column_names <- c(
@@ -285,6 +287,11 @@ multilevelannotationstep3 <- function(chemCompMZ,
     # rotate column names
     column_names[1:7] <- c(column_names[7], column_names[1:6])
     chemscoremat <- chemscoremat[, column_names]
+  }
+
+  # Join feature ID column if mapping provided
+  if (!is.null(mz_rt_feature_id_map) && length(chemscoremat) > 0) {
+    chemscoremat <- left_join(chemscoremat, mz_rt_feature_id_map, by = c("mz", "time"))
   }
 
   write.table(chemscoremat, file = file.path(outloc, "Stage3_correlation_scores.txt"), sep = "\t", row.names = FALSE)
