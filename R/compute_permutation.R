@@ -6,6 +6,11 @@
 #' m/z values across peaks, which breaks the true peak-compound relationships
 #' while maintaining the overall m/z distribution.
 #'
+#' P-values are computed using a global null distribution: for each observed
+#' score, the p-value is the proportion of ALL null scores (across all
+#' permutations) that are >= the observed score. This approach is used because
+#' after permuting m/z values, the original peak-to-annotation mapping is lost.
+#'
 #' @param annotation Data frame with annotation results including scores
 #' @param peak_table Peak table with mz, rt columns
 #' @param compound_table Compound database
@@ -41,6 +46,7 @@ compute_permutation_pvalues <- function(annotation,
   simple_annotation_fn <- simple_annotation
 
   # Function to run single permutation (wrapped in tryCatch for parallel safety)
+  # Returns all null scores for global null distribution (not per-peak matching)
   run_permutation <- function(perm_id) {
     tryCatch({
       permuted_peaks <- peak_table
@@ -53,18 +59,13 @@ compute_permutation_pvalues <- function(annotation,
         mass_tolerance = mass_tolerance
       )
 
-      # Match scores back to original annotation rows
-      null_scores <- rep(0, n_annotations)
+      # Return all null scores for global null distribution
+      # (We can't match back to original peaks by mz since mz values were permuted)
       if (nrow(null_annotation) > 0 && "score" %in% names(null_annotation)) {
-        for (i in seq_len(n_annotations)) {
-          peak_id <- annotation$mz[i]
-          matched <- null_annotation[abs(null_annotation$mz - peak_id) < 1e-6, ]
-          if (nrow(matched) > 0) {
-            null_scores[i] <- max(matched$score, na.rm = TRUE)
-          }
-        }
+        return(null_annotation$score)
+      } else {
+        return(numeric(0))
       }
-      return(null_scores)
     }, error = function(e) {
       return(NULL)
     })
@@ -166,17 +167,22 @@ compute_full_pvalues <- function(observed_scores,
 
   message(sprintf("Completed %d/%d permutations", n_successful, n_permutations))
 
-  # Count exceedances across all permutations (skip NULL results)
-  exceedance_counts <- rep(0, n_annotations)
-  for (null_scores in all_results) {
-    if (!is.null(null_scores)) {
-      exceedance_counts <- exceedance_counts + (null_scores >= observed_scores)
-    }
+  # Collect all null scores into global null distribution
+  all_null_scores <- unlist(all_results)
+  all_null_scores <- all_null_scores[!is.na(all_null_scores)]
+
+  message(sprintf("Global null distribution: %d scores", length(all_null_scores)))
+
+  if (length(all_null_scores) == 0) {
+    warning("No null scores generated. Returning p-value = 1 for all annotations.")
+    return(rep(1, n_annotations))
   }
 
-  # Calculate p-values with +1 correction (prevents p=0)
-  # Use actual number of successful permutations
-  p_values <- (exceedance_counts + 1) / (n_successful + 1)
+  # For each observed score, calculate p-value against global null distribution
+  # P-value = (number of null scores >= observed + 1) / (total null scores + 1)
+  p_values <- sapply(observed_scores, function(obs) {
+    (sum(all_null_scores >= obs) + 1) / (length(all_null_scores) + 1)
+  })
 
   return(p_values)
 }
@@ -198,7 +204,9 @@ compute_streaming_pvalues <- function(observed_scores,
                                       n_permutations,
                                       n_cores) {
   n_annotations <- length(observed_scores)
+  # Track exceedance counts for each observed score against global null distribution
   exceedance_counts <- rep(0, n_annotations)
+  total_null_scores <- 0
   n_successful <- 0
   n_failed_total <- 0
 
@@ -232,10 +240,15 @@ compute_streaming_pvalues <- function(observed_scores,
       n_failed_chunk <- sum(failed)
       n_failed_total <- n_failed_total + n_failed_chunk
 
-      # Only count exceedances for successful permutations
+      # Count exceedances against global null distribution
       for (null_scores in chunk_results[!failed]) {
-        if (!is.null(null_scores)) {
-          exceedance_counts <- exceedance_counts + (null_scores >= observed_scores)
+        if (!is.null(null_scores) && length(null_scores) > 0) {
+          # For each observed score, count how many null scores are >= it
+          for (obs_i in seq_along(observed_scores)) {
+            exceedance_counts[obs_i] <- exceedance_counts[obs_i] +
+              sum(null_scores >= observed_scores[obs_i])
+          }
+          total_null_scores <- total_null_scores + length(null_scores)
           n_successful <- n_successful + 1
         }
       }
@@ -255,8 +268,13 @@ compute_streaming_pvalues <- function(observed_scores,
   } else {
     for (i in seq_len(n_permutations)) {
       null_scores <- run_permutation(i)
-      if (!is.null(null_scores)) {
-        exceedance_counts <- exceedance_counts + (null_scores >= observed_scores)
+      if (!is.null(null_scores) && length(null_scores) > 0) {
+        # For each observed score, count how many null scores are >= it
+        for (obs_i in seq_along(observed_scores)) {
+          exceedance_counts[obs_i] <- exceedance_counts[obs_i] +
+            sum(null_scores >= observed_scores[obs_i])
+        }
+        total_null_scores <- total_null_scores + length(null_scores)
         n_successful <- n_successful + 1
       } else {
         n_failed_total <- n_failed_total + 1
@@ -277,9 +295,17 @@ compute_streaming_pvalues <- function(observed_scores,
     }
   }
 
+  message(sprintf("Global null distribution: %d scores from %d permutations",
+                  total_null_scores, n_successful))
+
+  if (total_null_scores == 0) {
+    warning("No null scores generated. Returning p-value = 1 for all annotations.")
+    return(rep(1, n_annotations))
+  }
+
   # Calculate p-values with +1 correction (prevents p=0)
-  # Use actual number of successful permutations
-  p_values <- (exceedance_counts + 1) / (n_successful + 1)
+  # P-value = (exceedance count + 1) / (total null scores + 1)
+  p_values <- (exceedance_counts + 1) / (total_null_scores + 1)
 
   return(p_values)
 }
