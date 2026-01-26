@@ -89,60 +89,47 @@ compute_delta_ppm <- function(chemscoremat_with_confidence) {
     return(chemscoremat_with_confidence)
 }
 
-boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs, max.mz.diff, max.rt.diff, outloc) {
+boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs,
+                                    max.mz.diff, max.rt.diff, outloc) {
     cnames_boost <- colnames(boostIDs)
+    has_mz <- "mz" %in% cnames_boost
+    has_time <- "time" %in% cnames_boost
 
-    if (length(cnames_boost) > 1) {
-        chemscoremat_with_confidence_mzrt <- chemscoremat_with_confidence[, c("mz", "time")]
-        validated_mzrt <- boostIDs[, c("mz", "time")]
+    if (has_mz || has_time) {
+        # Proximity-based matching
+        good_ind <- sapply(seq_len(nrow(chemscoremat_with_confidence)), function(i) {
+            ann_row <- chemscoremat_with_confidence[i, ]
 
-        ghilicpos <- getVenn(chemscoremat_with_confidence_mzrt,
-                             name_a = "exp", validated_mzrt, name_b = "boost", mz.thresh = max.mz.diff, time.thresh = max.rt.diff,
-                             alignment.tool = NA, xMSanalyzer.outloc = outloc, use.unique.mz = FALSE, plotvenn = FALSE
-        )
+            # Check ID match first
+            id_match <- boostIDs$ID == ann_row$chemical_ID
+            if (!any(id_match)) return(FALSE)
 
-        save(ghilicpos, file = file.path(outloc, "ghilicpos.Rda"))
-        
-        g1 <- ghilicpos$common
-        rm(ghilicpos)
-        
-        if (!is.na(max.rt.diff)) {
-            t1 <- table(g1$index.B)
-            ind_names <- names(t1)
-            parent_bad_ind <- {}
-        }
-        
-        t1 <- table(chemscoremat_with_confidence$Confidence, chemscoremat_with_confidence$chemical_ID)
-        cnames <- colnames(t1)
-        cnames <- cnames[which(cnames %in% boostIDs$ID)]
-        
-        good_ind_1 <- {}
-        
-        for (ind2 in 1:dim(g1)[1]) {
-            temp_ind1 <- g1$index.A[ind2]
-            temp_ind2 <- g1$index.B[ind2]
-            
-            
-            if (chemscoremat_with_confidence$chemical_ID[temp_ind1] %in% boostIDs$ID[temp_ind2]) {
-                good_ind_1 <- c(good_ind_1, g1$index.A[ind2])
+            # Filter by mz if present (using fractional/relative tolerance)
+            if (has_mz) {
+                mz_match <- abs(boostIDs$mz - ann_row$mz) <= max.mz.diff * pmax(abs(boostIDs$mz), abs(ann_row$mz))
+                id_match <- id_match & mz_match
             }
-        }
-        
-        overlap_mz_time_id <- good_ind_1
-        
-        chemscoremat_with_confidence$Confidence[overlap_mz_time_id] <- 4
-        chemscoremat_with_confidence$score[overlap_mz_time_id] <- chemscoremat_with_confidence$score[overlap_mz_time_id] * 100
-        t1 <- table(chemscoremat_with_confidence$Confidence[overlap_mz_time_id], chemscoremat_with_confidence$chemical_ID[overlap_mz_time_id])
-        
-        cnames1 <- colnames(t1)
-        cnames2 <- cnames1[which(t1 > 0)]
+
+            # Filter by time if present (using absolute tolerance in seconds)
+            if (has_time) {
+                time_match <- abs(boostIDs$time - ann_row$time) <= max.rt.diff
+                id_match <- id_match & time_match
+            }
+
+            return(any(id_match))
+        })
+
+        good_idx <- which(good_ind)
     } else {
-        good_ind <- which(chemscoremat_with_confidence$chemical_ID %in% boostIDs)
-        if (length(good_ind) > 0) {
-            chemscoremat_with_confidence$Confidence[good_ind] <- 4
-            chemscoremat_with_confidence$score[good_ind] <- chemscoremat_with_confidence$score[good_ind] * 100
-        }
+        # ID-only matching
+        good_idx <- which(chemscoremat_with_confidence$chemical_ID %in% boostIDs$ID)
     }
+
+    if (length(good_idx) > 0) {
+        chemscoremat_with_confidence$Confidence[good_idx] <- 4
+        chemscoremat_with_confidence$score[good_idx] <- chemscoremat_with_confidence$score[good_idx] * 100
+    }
+
     return(chemscoremat_with_confidence)
 }
 
@@ -156,6 +143,8 @@ multilevelannotationstep4 <- function(outloc,
                                       filter.by = NA,
                                       min_ions_perchem = 1,
                                       boostIDs = NA,
+                                      boost.mz.diff = NULL,
+                                      boost.rt.diff = NULL,
                                       max_isp = 5,
                                       dbAllinf = NA,
                                       mz_rt_feature_id_map = NULL) {
@@ -191,8 +180,12 @@ multilevelannotationstep4 <- function(outloc,
 
     # (II) Presence of required adducts/forms specified by the user
     # for assignment to high confidence categories (e.g., M + H).
-    if (!is.na(boostIDs)) {
-        chemscoremat_with_confidence <- boost_confidence_of_IDs(chemscoremat_with_confidence, boostIDs, max.mz.diff, max.rt.diff, outloc)
+    if (!identical(boostIDs, NA)) {
+        boost_mz <- if (!is.null(boost.mz.diff)) boost.mz.diff else max.mz.diff
+        boost_rt <- if (!is.null(boost.rt.diff)) boost.rt.diff else max.rt.diff
+        chemscoremat_with_confidence <- boost_confidence_of_IDs(
+            chemscoremat_with_confidence, boostIDs, boost_mz, boost_rt, outloc
+        )
     }
 
     t2 <- table(chemscoremat_with_confidence$mz)

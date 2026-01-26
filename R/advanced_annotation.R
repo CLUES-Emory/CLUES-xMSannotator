@@ -216,6 +216,10 @@ advanced_annotation <- function(peak_table,
                                 pathway_data = NULL,
                                 excluded_pathways = NULL,
                                 excluded_pathway_compounds = NULL,
+                                boosted_compounds = NULL,
+                                boost_match_by = c("mz", "rt"),
+                                boost_mass_tolerance = NULL,
+                                boost_time_tolerance = NULL,
                                 outloc = tempdir(),
                                 n_workers = parallel::detectCores()) {
   if (is.null(adduct_table)) {
@@ -233,6 +237,19 @@ advanced_annotation <- function(peak_table,
 
   if (pathway_mode == "custom" && is.null(pathway_data)) {
     stop("pathway_data is required when pathway_mode = 'custom'")
+  }
+
+  # Default boost tolerances to main tolerances if not specified
+  if (is.null(boost_mass_tolerance)) boost_mass_tolerance <- mass_tolerance
+  if (is.null(boost_time_tolerance)) boost_time_tolerance <- time_tolerance
+
+  # Validate and process boosted_compounds
+  if (!is.null(boosted_compounds)) {
+    valid_match <- c("mz", "rt")
+    if (!all(boost_match_by %in% valid_match)) {
+      stop("boost_match_by must be c('mz'), c('rt'), or c('mz', 'rt')")
+    }
+    boosted_compounds <- as_boosted_compounds_table(boosted_compounds, boost_match_by)
   }
 
   if (is.numeric(n_workers) && n_workers > 1) {
@@ -519,7 +536,10 @@ advanced_annotation <- function(peak_table,
     adduct_weights = adduct_weights,
     max_isp = maximum_isotopes,
     min_ions_perchem = min_ions_per_chemical,
-    mz_rt_feature_id_map = mz_rt_feature_id_map
+    mz_rt_feature_id_map = mz_rt_feature_id_map,
+    boostIDs = if (!is.null(boosted_compounds)) boosted_compounds else NA,
+    boost.mz.diff = boost_mass_tolerance,
+    boost.rt.diff = boost_time_tolerance
   )
   # ----------------------------
 

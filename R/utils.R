@@ -94,12 +94,43 @@ as_expected_adducts_table <- function (data) {
   return(data)
 }
 
+#' Validate boosted compounds table
+#' @param data Boosted compounds with columns: compound_id (required), mz (optional), rt (optional)
+#' @param match_by Which columns to use for matching: c("mz"), c("rt"), or c("mz", "rt")
+#' @return Validated table with ID, mz, time columns for boost_confidence_of_IDs()
 #' @import dplyr
-as_boosted_compounds_table <- function (data) {
-  data <- select(data, all_of('compound'), any_of(c('mz', 'rt')))
+as_boosted_compounds_table <- function(data, match_by = c("mz", "rt")) {
+  # Require compound_id column
+  if (!"compound_id" %in% names(data)) {
+    stop("boosted_compounds must contain 'compound_id' column")
+  }
 
-  stopifnot(is.numeric(data$mz))
-  stopifnot(is.numeric(data$rt))
+  # Rename compound_id to ID for internal function compatibility
+  data$ID <- data$compound_id
+
+  # Rename rt to time if present (internal function uses 'time')
+  if ("rt" %in% names(data)) {
+    data$time <- data$rt
+  }
+
+  # Validate required columns based on match_by
+  if ("mz" %in% match_by && !"mz" %in% names(data)) {
+    stop("boosted_compounds must contain 'mz' column when match_by includes 'mz'")
+  }
+  if ("rt" %in% match_by && !"time" %in% names(data)) {
+    stop("boosted_compounds must contain 'rt' column when match_by includes 'rt'")
+  }
+
+  # Select columns - ID required, mz/time based on match_by
+  cols_to_select <- c("ID")
+  if ("mz" %in% match_by) cols_to_select <- c(cols_to_select, "mz")
+  if ("rt" %in% match_by) cols_to_select <- c(cols_to_select, "time")
+
+  data <- select(data, all_of(cols_to_select))
+
+  # Validate numeric columns
+  if ("mz" %in% names(data)) stopifnot(is.numeric(data$mz))
+  if ("time" %in% names(data)) stopifnot(is.numeric(data$time))
 
   return(data)
 }
