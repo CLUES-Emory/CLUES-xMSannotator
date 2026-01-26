@@ -220,6 +220,10 @@ advanced_annotation <- function(peak_table,
                                 boost_match_by = c("mz", "rt"),
                                 boost_mass_tolerance = NULL,
                                 boost_time_tolerance = NULL,
+                                enable_permutation = FALSE,
+                                n_permutations = 1000,
+                                permutation_method = "full",
+                                permutation_seed = 42,
                                 outloc = tempdir(),
                                 n_workers = parallel::detectCores()) {
   if (is.null(adduct_table)) {
@@ -548,6 +552,30 @@ advanced_annotation <- function(peak_table,
   stage4_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
   write.table(stage4_output, file = file.path(outloc, "Stage4_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
+  # ----------------------------
+
+  # ----------------------------
+  # Permutation-based significance testing (optional)
+  # ----------------------------
+  if (enable_permutation) {
+    annotation <- compute_permutation_pvalues(
+      annotation = annotation,
+      peak_table = peak_table,
+      compound_table = compound_table,
+      adduct_table = adduct_table,
+      mass_tolerance = mass_tolerance,
+      n_permutations = n_permutations,
+      seed = permutation_seed,
+      n_cores = n_workers,
+      method = permutation_method
+    )
+
+    # Output Stage4 with permutation p-values
+    stage4_perm_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
+    write.table(stage4_perm_output,
+                file = file.path(outloc, "Stage4_permutation_pvalues.txt"),
+                sep = "\t", row.names = FALSE)
+  }
   # ----------------------------
 
   # Tool 11: print confidence distribution
