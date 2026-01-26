@@ -46,7 +46,7 @@ patrick::with_parameters_test_that(
     actual$MonoisotopicMass <- as.character(actual$MonoisotopicMass)
     expected$Module_RTclust <- as.character(expected$Module_RTclust)
 
-    keys <- c("mz", "time", "Name", "Adduct", "Formula", "chemical_ID", "cur_chem_score", "MatchCategory")
+    keys <- c("mz", "time", "Name", "Adduct", "Formula", "compound_id", "cur_chem_score", "MatchCategory")
 
     actual <- dplyr::arrange_at(
       actual, keys

@@ -32,7 +32,7 @@ reformat_annotation_table <- function(annotation) {
         !annotation$multiple_match ~ "Unique"
       ),
       theoretical.mz = annotation$expected_mass,
-      chemical_ID = annotation$compound_id,
+      compound_id = annotation$compound_id,
       Name = annotation$name,
       Formula = annotation$molecular_formula,
       MonoisotopicMass = annotation$monoisotopic_mass,

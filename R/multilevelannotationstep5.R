@@ -39,7 +39,7 @@ compute_multimatches <- function(mz, curated_res, adduct_weights) {
 
   for (feature in 1:nrow(multimatch_features)) {
     if (multimatch_features$score[feature] != max(multimatch_features$score)) {
-      same_molecule_idx <- which(curated_res$chemical_ID %in% multimatch_features$chemical_ID[feature])
+      same_molecule_idx <- which(curated_res$compound_id %in% multimatch_features$compound_id[feature])
       curated_res$score[same_molecule_idx] <- reevaluate_multimatches_score(curated_res[same_molecule_idx, ])
     }
   }
@@ -54,7 +54,7 @@ multilevelannotationstep5 <- function(outloc,
   adduct_weights <- create_adduct_weights(adduct_weights)
 
   curated_res <- curated_res[order(curated_res$Confidence,
-    curated_res$chemical_ID,
+    curated_res$compound_id,
     curated_res$score,
     curated_res$Adduct,
     decreasing = TRUE

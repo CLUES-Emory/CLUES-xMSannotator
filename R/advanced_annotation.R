@@ -51,7 +51,7 @@ remove_duplicates <- function(annotation, adduct_weights) {
 #' @importFrom rlang .data
 print_confidence_distribution <- function(annotation) {
   confidence_distribution_across_compounds <- annotation %>%
-    filter(!duplicated(.data$chemical_ID)) %>%
+    filter(!duplicated(.data$compound_id)) %>%
     count(.data$Confidence)
 
   confidence_distribution_across_formulas <- annotation %>%
@@ -138,9 +138,9 @@ custom_pathway_step <- function(chemscoremat,
     pathway_data <- pathway_data[!pathway_data$compound %in% excluded_pathway_compounds, ]
   }
 
-  # Map compound IDs (chemscoremat uses chemical_ID, pathway_data uses compound)
+  # Map compound IDs (chemscoremat uses compound_id, pathway_data uses compound)
   chemscoremat_for_pathways <- chemscoremat
-  names(chemscoremat_for_pathways)[names(chemscoremat_for_pathways) == "chemical_ID"] <- "compound"
+  names(chemscoremat_for_pathways)[names(chemscoremat_for_pathways) == "compound_id"] <- "compound"
 
   # Find significant compounds (score >= threshold and valid adduct)
   significant <- chemscoremat_for_pathways %>%
@@ -174,8 +174,8 @@ custom_pathway_step <- function(chemscoremat,
       dplyr::select(-pathway_score)
   }
 
-  # Rename back to chemical_ID
-  names(chemscoremat_for_pathways)[names(chemscoremat_for_pathways) == "compound"] <- "chemical_ID"
+  # Rename back to compound_id
+  names(chemscoremat_for_pathways)[names(chemscoremat_for_pathways) == "compound"] <- "compound_id"
 
   # Write output
   output <- chemscoremat_for_pathways
@@ -452,12 +452,12 @@ advanced_annotation <- function(peak_table,
 
   # Tool 8: Compute chemscores
   # ----------------------------
-  # Get unique chemical_IDs and process each once.
+  # Get unique compound_ids and process each once.
   # NOTE: distinct() only controls how many times get_chemscore is CALLED.
   # Inside get_chemscore, it queries the FULL annotation table for all rows
-  # with that chemical_ID, so ALL adducts are preserved.
+  # with that compound_id, so ALL adducts are preserved.
   unique_chemicals <- annotation %>%
-    dplyr::distinct(chemical_ID, .keep_all = TRUE)
+    dplyr::distinct(compound_id, .keep_all = TRUE)
 
   annotation <- purrr::pmap_dfr(
     unique_chemicals,
@@ -500,7 +500,7 @@ advanced_annotation <- function(peak_table,
   } else {
     # Default: HMDB pathway matching (existing behavior)
     data(hmdbCompMZ)
-    chemCompMZ <- dplyr::rename(hmdbCompMZ, chemical_ID = HMDBID)
+    chemCompMZ <- dplyr::rename(hmdbCompMZ, compound_id = HMDBID)
 
     annotation <- multilevelannotationstep3(
       chemCompMZ = chemCompMZ,

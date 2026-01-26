@@ -1,4 +1,4 @@
-"chemical_ID","Confidence","score","Module_RTclust","mz","time","MatchCategory","theoretical.mz","delta_ppm","Name","Formula","MonoisotopicMass","Adduct","ISgroup","mean_int_vec","MD"
+"compound_id","Confidence","score","Module_RTclust","mz","time","MatchCategory","theoretical.mz","delta_ppm","Name","Formula","MonoisotopicMass","Adduct","ISgroup","mean_int_vec","MD"
 "HMDB60083",3,5164004.24973775,"48_31",255.233615403547,865.81572541398,"Multiple",255.232954268,2.59,"Hexadecanoate (n-C16:0)","C16H32O2",256.240230268,"M-H","-",1871936758.64754,0.24
 "HMDB60083",3,5164004.24973775,"48_31",511.474251060567,859.084523071459,"Multiple",511.473184536,2.09,"Hexadecanoate (n-C16:0)","C16H32O2",256.240230268,"2M-H","-",861398.69022976,0.48
 "HMDB60001",3,6485445.21421777,"29_2",350.088994396946,284.241111008364,"Unique",350.088140525,2.44,"Indole-3-acetic-acid-O-glucuronide","C16H17NO8",351.095416525,"M-H","-",1751117395.92465,0.9

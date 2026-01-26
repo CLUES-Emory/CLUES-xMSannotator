@@ -8,7 +8,7 @@ compute_confidence_levels <- function(c,
                                       min_ions_perchem) {
     cur_chemid <- chemids[c]
 
-    curdata <- chemscoremat[which(chemscoremat$chemical_ID == cur_chemid), ]
+    curdata <- chemscoremat[which(chemscoremat$compound_id == cur_chemid), ]
     curdata <- curdata[order(curdata$Adduct), ]
     
     bool_check <- 1
@@ -64,7 +64,7 @@ compute_confidence_levels <- function(c,
 
     curdata <- cbind(Confidence, curdata)
     curdata <- as.data.frame(curdata)
-    curdata <- curdata[, c("Confidence", "chemical_ID")]
+    curdata <- curdata[, c("Confidence", "compound_id")]
     curdata <- unique(curdata)
     return(curdata)
 }
@@ -101,7 +101,7 @@ boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs,
             ann_row <- chemscoremat_with_confidence[i, ]
 
             # Check ID match first
-            id_match <- boostIDs$ID == ann_row$chemical_ID
+            id_match <- boostIDs$ID == ann_row$compound_id
             if (!any(id_match)) return(FALSE)
 
             # Filter by mz if present (using fractional/relative tolerance)
@@ -122,7 +122,7 @@ boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs,
         good_idx <- which(good_ind)
     } else {
         # ID-only matching
-        good_idx <- which(chemscoremat_with_confidence$chemical_ID %in% boostIDs$ID)
+        good_idx <- which(chemscoremat_with_confidence$compound_id %in% boostIDs$ID)
     }
 
     if (length(good_idx) > 0) {
@@ -148,7 +148,7 @@ multilevelannotationstep4 <- function(outloc,
                                       max_isp = 5,
                                       dbAllinf = NA,
                                       mz_rt_feature_id_map = NULL) {
-    chemids <- unique(chemscoremat$chemical_ID)
+    chemids <- unique(chemscoremat$compound_id)
 
     data(adduct_table)
     adduct_table <- adduct_table[order(adduct_table$Adduct), ]
@@ -171,7 +171,7 @@ multilevelannotationstep4 <- function(outloc,
     chemscoremat_conf_levels <- plyr::ldply(chemscoremat_conf_levels, rbind)
     chemscoremat_conf_levels <- as.data.frame(chemscoremat_conf_levels)
 
-    chemscoremat_with_confidence <- merge(chemscoremat_conf_levels, unique(chemscoremat), by = "chemical_ID")
+    chemscoremat_with_confidence <- merge(chemscoremat_conf_levels, unique(chemscoremat), by = "compound_id")
     chemscoremat_with_confidence <- as.data.frame(chemscoremat_with_confidence)
     
     cnames1 <- colnames(chemscoremat_with_confidence)
@@ -206,7 +206,7 @@ multilevelannotationstep4 <- function(outloc,
     chemscoremat_with_confidence <- chemscoremat_with_confidence[order(chemscoremat_with_confidence$Confidence, decreasing = TRUE), ]
 
     print("Stage 4 confidence level distribution for unique chemical/metabolite IDs")
-    print(table(chemscoremat_with_confidence$Confidence[-which(duplicated(chemscoremat_with_confidence$chemical_ID) == TRUE)]))
+    print(table(chemscoremat_with_confidence$Confidence[-which(duplicated(chemscoremat_with_confidence$compound_id) == TRUE)]))
 
     print("Stage 4 confidence level distribution for unique chemical/metabolite formulas")
     print(table(chemscoremat_with_confidence$Confidence[-which(duplicated(chemscoremat_with_confidence$Formula) == TRUE)]))

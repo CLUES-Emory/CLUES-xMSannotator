@@ -1,4 +1,4 @@
-"chemical_ID","Confidence","score","Module_RTclust","mz","time","MatchCategory","theoretical.mz","delta_ppm","Name","Formula","MonoisotopicMass","Adduct","ISgroup","mean_int_vec","MD"
+"compound_id","Confidence","score","Module_RTclust","mz","time","MatchCategory","theoretical.mz","delta_ppm","Name","Formula","MonoisotopicMass","Adduct","ISgroup","mean_int_vec","MD"
 "HMDB61136",2,1e+05,"4_26",265.117617521303,197.946286627413,"Multiple",265.11828301,2.51,"di-Hydroxymelatonin","C13H16N2O4",264.11100701,"M+H","-",1561151.91234635,0.12
 "HMDB61093",2,1e+05,"4_24",130.049811896097,194.967082477251,"Multiple",130.049869095,0.44,"dimethadione","C5H7NO3",129.042593095,"M+H","-",1353731.74833725,0.5
 "HMDB61093",2,1e+05,"1_12",130.050009743661,180.781477071218,"Multiple",130.049869095,1.08,"dimethadione","C5H7NO3",129.042593095,"M+H","-",37315540.3952369,0.6

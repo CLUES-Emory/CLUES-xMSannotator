@@ -19,14 +19,14 @@ filter_score_and_adducts <- function(chemscoremat, scorethresh, adduct_weights) 
 
 
 count_chemicals_occurence <- function(module_data, pathway_chemicals, scorethresh, adduct_weights) {
-  indices_in_pathway <- which(module_data$chemical_ID %in% pathway_chemicals)
+  indices_in_pathway <- which(module_data$compound_id %in% pathway_chemicals)
   module_data_pathway <- module_data[indices_in_pathway, ]
 
   module_data <- filter_score_and_adducts(module_data, scorethresh, adduct_weights)
   module_data_pathway <- filter_score_and_adducts(module_data_pathway, scorethresh, adduct_weights)
 
-  num_pathway <- length(unique(module_data_pathway$chemical_ID))
-  num <- length(unique(module_data$chemical_ID)) - num_pathway
+  num_pathway <- length(unique(module_data_pathway$compound_id))
+  num <- length(unique(module_data$compound_id)) - num_pathway
   return(list(num_pathway = num_pathway, num = num))
 }
 
@@ -53,21 +53,21 @@ compute_score_pathways <- function(chemscoremat, db, pathwaycheckmode, scorethre
         curmchemical <- filter_score_and_adducts(chemscoremat, scorethresh, adduct_weights)
 
         # chemicals in pathway
-        curmchemical_in_pathway <- curmchemical[which(curmchemical$chemical_ID %in% pathway_chemicals), ]
+        curmchemical_in_pathway <- curmchemical[which(curmchemical$compound_id %in% pathway_chemicals), ]
 
         # molecules of interest in pathway (a)
-        num_chems_inpath <- length(unique(curmchemical_in_pathway$chemical_ID))
+        num_chems_inpath <- length(unique(curmchemical_in_pathway$compound_id))
 
         # non-focus molecules associated with pathway (c)
         num_chem_inpath_notinterest <- all_cur_path_numchem - num_chems_inpath
 
         # chemicals NOT in pathway
-        curmchemical_not_in_pathway <- curmchemical[-which(curmchemical$chemical_ID %in% pathway_chemicals), ]
+        curmchemical_not_in_pathway <- curmchemical[-which(curmchemical$compound_id %in% pathway_chemicals), ]
 
         # focus molecules not associated with this pathway (b)
-        num_chems_notinpath <- length(unique(curmchemical_not_in_pathway$chemical_ID))
+        num_chems_notinpath <- length(unique(curmchemical_not_in_pathway$compound_id))
 
-        all_notcurpath_numchem <- length(db[-which(db[, 1] %in% curmchemical_not_in_pathway$chemical_ID), 1])
+        all_notcurpath_numchem <- length(db[-which(db[, 1] %in% curmchemical_not_in_pathway$compound_id), 1])
 
         p_value <- p_test(c(
           num_chems_inpath,
@@ -81,7 +81,7 @@ compute_score_pathways <- function(chemscoremat, db, pathwaycheckmode, scorethre
 
 
           for (chemname in pathway_chemicals_to_iterate) {
-            pathway_indices <- which(as.character(curmchemical_in_pathway$chemical_ID) == chemname)
+            pathway_indices <- which(as.character(curmchemical_in_pathway$compound_id) == chemname)
             curmchemicaldata <- curmchemical_in_pathway[pathway_indices, ]
 
             t2 <- table(curmchemicaldata$module_num)
@@ -138,11 +138,11 @@ compute_score_pathways <- function(chemscoremat, db, pathwaycheckmode, scorethre
 
                   if (curmchemicaldata$score[1] < scorethresh) {
                     indices <- which(
-                      as.character(chemscoremat$chemical_ID) == chemical_name &
+                      as.character(chemscoremat$compound_id) == chemical_name &
                         chemscoremat$Adduct %in% as.character(adduct_weights[, 1])
                     )
                   } else {
-                    indices <- which(as.character(chemscoremat$chemical_ID) == chemical_name)
+                    indices <- which(as.character(chemscoremat$compound_id) == chemical_name)
                   }
 
                   chemscoremat$score[indices] <- as.numeric(chemscoremat$score[indices][1]) + num_chems
@@ -243,7 +243,7 @@ multilevelannotationstep3 <- function(chemCompMZ,
     "time",
     "MatchCategory",
     "theoretical.mz",
-    "chemical_ID",
+    "compound_id",
     "Name",
     "Formula",
     "MonoisotopicMass",
@@ -255,7 +255,7 @@ multilevelannotationstep3 <- function(chemCompMZ,
   chemscoremat <- sanitize_chemscoremat(chemscoremat, chemCompMZ, column_names)
 
   hmdbbad <- c("HMDB29244", "HMDB29245", "HMDB29246")
-  bad_indices <- which(chemscoremat$chemical_ID %in% hmdbbad)
+  bad_indices <- which(chemscoremat$compound_id %in% hmdbbad)
 
   if (length(bad_indices) > 0) {
     chemscoremat <- chemscoremat[-bad_indices, ]
@@ -268,7 +268,7 @@ multilevelannotationstep3 <- function(chemCompMZ,
     db <- preprocess_db(hmdbAllinfv3.5, 14, "SM")
     chemscoremat <- merge(chemscoremat,
       hmdbAllinfv3.5,
-      by.x = "chemical_ID",
+      by.x = "compound_id",
       by.y = "HMDBID"
     )
     rm(hmdbAllinfv3.5)

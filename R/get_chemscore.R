@@ -15,10 +15,10 @@ get_chemscore <- function(...,
 
   query <- tibble::tibble(...)
 
-  # Filter to this chemical_ID within RT window (FIX: use max_diff_rt, was hardcoded to 10)
+  # Filter to this compound_id within RT window (FIX: use max_diff_rt, was hardcoded to 10)
   curmchemdata <- dplyr::filter(
     annotation,
-    chemical_ID == query$chemical_ID &
+    compound_id == query$compound_id &
       abs(time - query$time) <= max_diff_rt
   )
 
@@ -46,7 +46,7 @@ get_chemscore <- function(...,
     corthresh = corthresh,
     filter.by = filter.by,
     max_diff_rt = max_diff_rt,
-    chemicalid = query$chemical_ID,
+    chemicalid = query$compound_id,
     MplusH.abundance.ratio.check = MplusH.abundance.ratio.check
   )
 
@@ -93,7 +93,7 @@ get_chemscore <- function(...,
   }
 
   # Filter on critical columns only
-  critical_cols <- c("mz", "time", "chemical_ID", "Adduct")
+  critical_cols <- c("mz", "time", "compound_id", "Adduct")
   chemscoremat <- chemscoremat[complete.cases(chemscoremat[, critical_cols]), ]
 
   if (nrow(chemscoremat) < 1) {
