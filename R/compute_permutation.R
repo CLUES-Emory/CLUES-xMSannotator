@@ -36,13 +36,17 @@ compute_permutation_pvalues <- function(annotation,
   message(sprintf("Permutations: %d, Cores: %d, Method: %s",
                   n_permutations, n_cores, method))
 
+  # Capture function reference for parallel processing
+  # (forked processes need explicit reference, not namespace lookup)
+  simple_annotation_fn <- simple_annotation
+
   # Function to run single permutation (wrapped in tryCatch for parallel safety)
   run_permutation <- function(perm_id) {
     tryCatch({
       permuted_peaks <- peak_table
       permuted_peaks$mz <- sample(permuted_peaks$mz)
 
-      null_annotation <- simple_annotation(
+      null_annotation <- simple_annotation_fn(
         peak_table = permuted_peaks,
         compound_table = compound_table,
         adduct_table = adduct_table,
