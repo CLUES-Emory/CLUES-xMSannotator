@@ -36,30 +36,34 @@ compute_permutation_pvalues <- function(annotation,
   message(sprintf("Permutations: %d, Cores: %d, Method: %s",
                   n_permutations, n_cores, method))
 
-  # Function to run single permutation
+  # Function to run single permutation (wrapped in tryCatch for parallel safety)
   run_permutation <- function(perm_id) {
-    permuted_peaks <- peak_table
-    permuted_peaks$mz <- sample(permuted_peaks$mz)
+    tryCatch({
+      permuted_peaks <- peak_table
+      permuted_peaks$mz <- sample(permuted_peaks$mz)
 
-    null_annotation <- simple_annotation(
-      peak_table = permuted_peaks,
-      compound_table = compound_table,
-      adduct_table = adduct_table,
-      mass_tolerance = mass_tolerance
-    )
+      null_annotation <- simple_annotation(
+        peak_table = permuted_peaks,
+        compound_table = compound_table,
+        adduct_table = adduct_table,
+        mass_tolerance = mass_tolerance
+      )
 
-    # Match scores back to original annotation rows
-    null_scores <- rep(0, n_annotations)
-    if (nrow(null_annotation) > 0 && "score" %in% names(null_annotation)) {
-      for (i in seq_len(n_annotations)) {
-        peak_id <- annotation$mz[i]
-        matched <- null_annotation[abs(null_annotation$mz - peak_id) < 1e-6, ]
-        if (nrow(matched) > 0) {
-          null_scores[i] <- max(matched$score, na.rm = TRUE)
+      # Match scores back to original annotation rows
+      null_scores <- rep(0, n_annotations)
+      if (nrow(null_annotation) > 0 && "score" %in% names(null_annotation)) {
+        for (i in seq_len(n_annotations)) {
+          peak_id <- annotation$mz[i]
+          matched <- null_annotation[abs(null_annotation$mz - peak_id) < 1e-6, ]
+          if (nrow(matched) > 0) {
+            null_scores[i] <- max(matched$score, na.rm = TRUE)
+          }
         }
       }
-    }
-    return(null_scores)
+      return(null_scores)
+    }, error = function(e) {
+      return(NULL)
+    })
   }
 
 
@@ -116,7 +120,10 @@ compute_full_pvalues <- function(observed_scores,
   if (n_cores > 1) {
     if (.Platform$OS.type == "unix") {
       all_results <- parallel::mclapply(
-        seq_len(n_permutations), run_permutation, mc.cores = n_cores
+        seq_len(n_permutations),
+        run_permutation,
+        mc.cores = n_cores,
+        mc.preschedule = FALSE  # Better error handling for forked processes
       )
     } else {
       cl <- parallel::makeCluster(n_cores)
@@ -125,6 +132,24 @@ compute_full_pvalues <- function(observed_scores,
       parallel::stopCluster(cl)
       on.exit(NULL)
     }
+
+    # Check for errors (mclapply returns NULL or try-error on failure)
+    failed <- sapply(all_results, function(x) {
+      is.null(x) || inherits(x, "try-error") ||
+        (is.list(x) && length(x) > 0 && inherits(x[[1]], "error"))
+    })
+    n_failed <- sum(failed)
+    if (n_failed > 0) {
+      warning(sprintf("%d of %d permutations failed. Using %d successful permutations.",
+                      n_failed, n_permutations, n_permutations - n_failed))
+      all_results <- all_results[!failed]
+    }
+
+    if (length(all_results) == 0) {
+      stop("All permutations failed. Check that simple_annotation works correctly.")
+    }
+
+    n_successful <- length(all_results)
   } else {
     all_results <- lapply(seq_len(n_permutations), function(i) {
       if (i %% 100 == 0) {
@@ -132,18 +157,22 @@ compute_full_pvalues <- function(observed_scores,
       }
       run_permutation(i)
     })
+    n_successful <- n_permutations
   }
 
-  message(sprintf("Completed %d/%d permutations", n_permutations, n_permutations))
+  message(sprintf("Completed %d/%d permutations", n_successful, n_permutations))
 
-  # Count exceedances across all permutations
+  # Count exceedances across all permutations (skip NULL results)
   exceedance_counts <- rep(0, n_annotations)
   for (null_scores in all_results) {
-    exceedance_counts <- exceedance_counts + (null_scores >= observed_scores)
+    if (!is.null(null_scores)) {
+      exceedance_counts <- exceedance_counts + (null_scores >= observed_scores)
+    }
   }
 
   # Calculate p-values with +1 correction (prevents p=0)
-  p_values <- (exceedance_counts + 1) / (n_permutations + 1)
+  # Use actual number of successful permutations
+  p_values <- (exceedance_counts + 1) / (n_successful + 1)
 
   return(p_values)
 }
@@ -166,6 +195,8 @@ compute_streaming_pvalues <- function(observed_scores,
                                       n_cores) {
   n_annotations <- length(observed_scores)
   exceedance_counts <- rep(0, n_annotations)
+  n_successful <- 0
+  n_failed_total <- 0
 
   if (n_cores > 1) {
     chunk_size <- min(50, n_permutations)
@@ -176,7 +207,10 @@ compute_streaming_pvalues <- function(observed_scores,
 
       if (.Platform$OS.type == "unix") {
         chunk_results <- parallel::mclapply(
-          chunk_ids, run_permutation, mc.cores = n_cores
+          chunk_ids,
+          run_permutation,
+          mc.cores = n_cores,
+          mc.preschedule = FALSE  # Better error handling for forked processes
         )
       } else {
         cl <- parallel::makeCluster(n_cores)
@@ -186,26 +220,62 @@ compute_streaming_pvalues <- function(observed_scores,
         on.exit(NULL)
       }
 
-      for (null_scores in chunk_results) {
-        exceedance_counts <- exceedance_counts + (null_scores >= observed_scores)
+      # Check for errors in this chunk
+      failed <- sapply(chunk_results, function(x) {
+        is.null(x) || inherits(x, "try-error") ||
+          (is.list(x) && length(x) > 0 && inherits(x[[1]], "error"))
+      })
+      n_failed_chunk <- sum(failed)
+      n_failed_total <- n_failed_total + n_failed_chunk
+
+      # Only count exceedances for successful permutations
+      for (null_scores in chunk_results[!failed]) {
+        if (!is.null(null_scores)) {
+          exceedance_counts <- exceedance_counts + (null_scores >= observed_scores)
+          n_successful <- n_successful + 1
+        }
       }
 
       gc()
       message(sprintf("Completed %d/%d permutations", chunk_end, n_permutations))
     }
+
+    if (n_failed_total > 0) {
+      warning(sprintf("%d of %d permutations failed. Using %d successful permutations.",
+                      n_failed_total, n_permutations, n_successful))
+    }
+
+    if (n_successful == 0) {
+      stop("All permutations failed. Check that simple_annotation works correctly.")
+    }
   } else {
     for (i in seq_len(n_permutations)) {
       null_scores <- run_permutation(i)
-      exceedance_counts <- exceedance_counts + (null_scores >= observed_scores)
+      if (!is.null(null_scores)) {
+        exceedance_counts <- exceedance_counts + (null_scores >= observed_scores)
+        n_successful <- n_successful + 1
+      } else {
+        n_failed_total <- n_failed_total + 1
+      }
 
       if (i %% 100 == 0) {
         message(sprintf("Completed %d/%d permutations", i, n_permutations))
       }
     }
+
+    if (n_failed_total > 0) {
+      warning(sprintf("%d of %d permutations failed. Using %d successful permutations.",
+                      n_failed_total, n_permutations, n_successful))
+    }
+
+    if (n_successful == 0) {
+      stop("All permutations failed. Check that simple_annotation works correctly.")
+    }
   }
 
   # Calculate p-values with +1 correction (prevents p=0)
-  p_values <- (exceedance_counts + 1) / (n_permutations + 1)
+  # Use actual number of successful permutations
+  p_values <- (exceedance_counts + 1) / (n_successful + 1)
 
   return(p_values)
 }
