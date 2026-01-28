@@ -5,7 +5,8 @@ compute_confidence_levels <- function(c,
                                       max.rt.diff,
                                       adduct_weights,
                                       max_isp,
-                                      min_ions_perchem) {
+                                      min_ions_perchem,
+                                      adduct_table) {
     cur_chemid <- chemids[c]
 
     curdata <- chemscoremat[which(chemscoremat$compound_id == cur_chemid), ]
@@ -28,7 +29,8 @@ compute_confidence_levels <- function(c,
                         adduct_weights = adduct_weights,
                         filter.by = filter.by,
                         max_isp = max_isp,
-                        min_ions_perchem = min_ions_perchem
+                        min_ions_perchem = min_ions_perchem,
+                        adduct_table = adduct_table
                     )
         if (!is.na(curdata[1, 1])) {
             Confidence <- as.numeric(as.character(curdata[, 1]))
@@ -147,12 +149,15 @@ multilevelannotationstep4 <- function(outloc,
                                       boost.rt.diff = NULL,
                                       max_isp = 5,
                                       dbAllinf = NA,
-                                      mz_rt_feature_id_map = NULL) {
+                                      mz_rt_feature_id_map = NULL,
+                                      adduct_table = NULL) {
     chemids <- unique(chemscoremat$compound_id)
 
-    data(adduct_table)
-    adduct_table <- adduct_table[order(adduct_table$Adduct), ]
-    
+    # Load package adduct_table if not provided
+    if (is.null(adduct_table)) {
+        data("adduct_table", envir = environment())
+    }
+
     adduct_weights <- create_adduct_weights(adduct_weights)
 
     # assign confidence level
@@ -165,7 +170,8 @@ multilevelannotationstep4 <- function(outloc,
         max.rt.diff,
         adduct_weights,
         max_isp,
-        min_ions_perchem
+        min_ions_perchem,
+        adduct_table
     )
     
     chemscoremat_conf_levels <- plyr::ldply(chemscoremat_conf_levels, rbind)

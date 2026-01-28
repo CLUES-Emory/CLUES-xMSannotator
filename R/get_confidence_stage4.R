@@ -36,7 +36,8 @@ get_confidence_stage4 <-function(curdata,
                                  adduct_weights = NA,
                                  filter.by = NA,
                                  min_ions_perchem = 1,
-                                 max_isp = 5) {
+                                 max_isp = 5,
+                                 adduct_table) {
     curdata <- curdata[order(curdata$Adduct), ]
     
     # (I) Score is greater than zero.
@@ -54,17 +55,23 @@ get_confidence_stage4 <-function(curdata,
 
     adduct_weights <- create_adduct_weights(adduct_weights)
     
-    adduct_monoisot <- data.frame(cbind("M", 1, 1, 0, "-", "S"))
-    colnames(adduct_monoisot) <- colnames(adduct_table)
-    adduct_table <- rbind(adduct_table, adduct_monoisot)
-    adduct_table <- adduct_table[order(adduct_table$Adduct), ]
+    # Add monoisotopic "M" adduct with correct 4-column format
+    adduct_monoisot <- data.frame(
+        adduct = "M",
+        charge = 1,
+        factor = 1,
+        mass = 0,
+        stringsAsFactors = FALSE
+    )
+    adduct_table_local <- rbind(adduct_table, adduct_monoisot)
+    adduct_table_local <- adduct_table_local[order(adduct_table_local$adduct), ]
     
     curdata <- cbind(curdata, cur_adducts)
-    curdata <- merge(curdata, adduct_table, by.x = "cur_adducts", by.y = "Adduct")
+    curdata <- merge(curdata, adduct_table_local, by.x = "cur_adducts", by.y = "adduct")
     curdata <- curdata[, -c(1)]
     
     chemscoremat_conf_levels <- "High"
-    if (length(which(adduct_table$Adduct %in% cur_adducts)) < 1) {
+    if (length(which(adduct_table_local$adduct %in% cur_adducts)) < 1) {
       chemscoremat_conf_levels <- "None"
     }
     
@@ -161,7 +168,7 @@ get_confidence_stage4 <-function(curdata,
         }
       }
     } else {
-      min_molecules <- min(curdata$num_molecules)
+      min_molecules <- min(curdata$factor)
       # number of molecules check
       if (min_molecules > 1) {
         chemscoremat_conf_levels <- "Low"
@@ -172,10 +179,10 @@ get_confidence_stage4 <-function(curdata,
         
         check_abundance <- gregexpr(text = cur_adducts, pattern = "([2-3]+M)")
         if (length(check_abundance) > 0) {
-          min_mol_ind <- which(curdata$num_molecules == min_molecules)
+          min_mol_ind <- which(curdata$factor == min_molecules)
           max_int_min_mol <- max(curdata$mean_int_vec[min_mol_ind])
           bad_ind_status <- rep(0, length(check_abundance))
-          min_molecules <- min(adduct_table[which(adduct_table$Adduct %in% cur_adducts), 2])
+          min_molecules <- min(adduct_table_local$charge[adduct_table_local$adduct %in% cur_adducts])
           
           if (min_molecules < 2) {
             # check pattern of each adduct

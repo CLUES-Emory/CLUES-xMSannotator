@@ -85,12 +85,11 @@ group_by_rt_histv2 <- function(mchemicaldata, time_step = 1, max_diff_rt = 10, g
 #' @param adduct_weights Adduct weights
 #' @param max_diff_rt Maximum RT difference
 #' @return Confidence score level (0-3)
-get_confidence_stage2 <- function(curdata, adduct_weights = NA, max_diff_rt = 10) {
+get_confidence_stage2 <- function(curdata, adduct_weights = NA, max_diff_rt = 10, adduct_table) {
   curdata <- curdata[order(curdata$Adduct), ]
   cur_adducts_with_isotopes <- curdata$Adduct
   cur_adducts <- gsub(cur_adducts_with_isotopes, pattern = "(_\\[(\\+|\\-)[0-9]*\\])", replacement = "")
 
-  data(adduct_table)
   if (anyNA(adduct_weights)) {
     adduct_weights1 <- matrix(nrow = 2, ncol = 2, 0)
     adduct_weights1[1, ] <- c("M+H", 1)
@@ -98,10 +97,10 @@ get_confidence_stage2 <- function(curdata, adduct_weights = NA, max_diff_rt = 10
     adduct_weights <- as.data.frame(adduct_weights1)
     colnames(adduct_weights) <- c("Adduct", "Weight")
   }
-  adduct_table <- adduct_table[order(adduct_table$Adduct), ]
+  adduct_table <- adduct_table[order(adduct_table$adduct), ]
 
   curdata <- cbind(curdata, cur_adducts)
-  curdata <- merge(curdata, adduct_table, by.x = "cur_adducts", by.y = "Adduct")
+  curdata <- merge(curdata, adduct_table, by.x = "cur_adducts", by.y = "adduct")
   curdata <- curdata[, -c(1)]
 
   formula_vec <- curdata$Formula
@@ -110,7 +109,7 @@ get_confidence_stage2 <- function(curdata, adduct_weights = NA, max_diff_rt = 10
 
   chemscoremat_conf_levels <- "High"
 
-  if (length(which(adduct_table$Adduct %in% cur_adducts)) < 1) {
+  if (length(which(adduct_table$adduct %in% cur_adducts)) < 1) {
     return("0")
   }
 
@@ -137,7 +136,7 @@ get_confidence_stage2 <- function(curdata, adduct_weights = NA, max_diff_rt = 10
       chemscoremat_conf_levels <- "Low"
     }
   } else {
-    min_nummol <- min(curdata$num_molecules)
+    min_nummol <- min(curdata$factor)
     if (min_nummol > 1) {
       chemscoremat_conf_levels <- "Low"
     } else {
@@ -744,10 +743,10 @@ compute_cor_mz <- function(mzid_cur, global_cor) {
   return(cor_mz)
 }
 
-get_conf_level <- function(mchemicaldata, adduct_weights) {
+get_conf_level <- function(mchemicaldata, adduct_weights, adduct_table) {
   conf_level <- 0
   if (length(mchemicaldata) > 0 && nrow(mchemicaldata) > 0) {
-    conf_level <- get_confidence_stage2(curdata = mchemicaldata, adduct_weights = adduct_weights)
+    conf_level <- get_confidence_stage2(curdata = mchemicaldata, adduct_weights = adduct_weights, adduct_table = adduct_table)
     conf_level <- as.numeric(as.character(conf_level))
   }
   return(conf_level)
@@ -806,7 +805,8 @@ compute_best_score <- function(table_mod,
                                max_diff_rt,
                                filter.by,
                                chemicalid,
-                               MplusH.abundance.ratio.check) {
+                               MplusH.abundance.ratio.check,
+                               adduct_table) {
   top_mod <- names(table_mod)
 
   best_chemical_score <- (-100)
@@ -866,7 +866,7 @@ compute_best_score <- function(table_mod,
       }
     }
 
-    conf_level <- get_conf_level(mchemicaldata, adduct_weights)
+    conf_level <- get_conf_level(mchemicaldata, adduct_weights, adduct_table)
     chemical_score <- apply_rt_scaling(mchemicaldata, max_diff_rt, chemical_score)
     min_chemical_score <- get_min_chemscore(corthresh, max_diff_rt)
     chemical_score <- if (chemical_score > min_chemical_score) chemical_score * (conf_level^conf_level) else 0
@@ -893,7 +893,8 @@ compute_chemical_score <- function(mchemicaldata,
                                    filter.by,
                                    max_diff_rt,
                                    chemicalid,
-                                   MplusH.abundance.ratio.check) {
+                                   MplusH.abundance.ratio.check,
+                                   adduct_table) {
   table_mod <- compute_table_mod(mchemicaldata$Module_RTclust)
 
   mchemicaldata_orig <- mchemicaldata
@@ -908,7 +909,8 @@ compute_chemical_score <- function(mchemicaldata,
       max_diff_rt,
       filter.by,
       chemicalid,
-      MplusH.abundance.ratio.check
+      MplusH.abundance.ratio.check,
+      adduct_table
     )
 
     ## for loop complete

@@ -11,7 +11,8 @@ get_chemscore <- function(...,
                           adduct_weights,
                           filter.by,
                           mass_defect_window = 0.01,
-                          MplusH.abundance.ratio.check = TRUE) {
+                          MplusH.abundance.ratio.check = TRUE,
+                          adduct_table) {
 
   query <- tibble::tibble(...)
 
@@ -47,7 +48,8 @@ get_chemscore <- function(...,
     filter.by = filter.by,
     max_diff_rt = max_diff_rt,
     chemicalid = query$compound_id,
-    MplusH.abundance.ratio.check = MplusH.abundance.ratio.check
+    MplusH.abundance.ratio.check = MplusH.abundance.ratio.check,
+    adduct_table = adduct_table
   )
 
   # Return NULL if no valid monoisotopic data
