@@ -37,7 +37,8 @@ get_confidence_stage4 <-function(curdata,
                                  filter.by = NA,
                                  min_ions_perchem = 1,
                                  max_isp = 5,
-                                 adduct_table) {
+                                 adduct_table,
+                                 multimer_abundance_check = TRUE) {
     curdata <- curdata[order(curdata$Adduct), ]
     
     # (I) Score is greater than zero.
@@ -173,10 +174,11 @@ get_confidence_stage4 <-function(curdata,
       if (min_molecules > 1) {
         chemscoremat_conf_levels <- "Low"
       } else {
-        # (V) Abundance ratio checks for isotopes, multimers (dimers and trimers), 
-        # and multiply charged adducts with respect to the singly charged adducts 
+        # (V) Abundance ratio checks for isotopes, multimers (dimers and trimers),
+        # and multiply charged adducts with respect to the singly charged adducts
         # and ions according to heuristic rules.
-        
+
+        if (multimer_abundance_check) {
         check_abundance <- gregexpr(text = cur_adducts, pattern = "([2-3]+M)")
         if (length(check_abundance) > 0) {
           min_mol_ind <- which(curdata$factor == min_molecules)
@@ -266,9 +268,10 @@ get_confidence_stage4 <-function(curdata,
           formula_vec <- curdata$Formula
           curformula <- as.character(formula_vec[1])
         }
+        }
       }
     }
-  
+
     # (IV) Hydrogen/carbon ratio check.
     formula_vec <- curdata$Formula
     curformula <- as.character(formula_vec[1])

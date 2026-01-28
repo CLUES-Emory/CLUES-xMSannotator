@@ -6,7 +6,8 @@ compute_confidence_levels <- function(c,
                                       adduct_weights,
                                       max_isp,
                                       min_ions_perchem,
-                                      adduct_table) {
+                                      adduct_table,
+                                      multimer_abundance_check) {
     cur_chemid <- chemids[c]
 
     curdata <- chemscoremat[which(chemscoremat$compound_id == cur_chemid), ]
@@ -30,7 +31,8 @@ compute_confidence_levels <- function(c,
                         filter.by = filter.by,
                         max_isp = max_isp,
                         min_ions_perchem = min_ions_perchem,
-                        adduct_table = adduct_table
+                        adduct_table = adduct_table,
+                        multimer_abundance_check = multimer_abundance_check
                     )
         if (!is.na(curdata[1, 1])) {
             Confidence <- as.numeric(as.character(curdata[, 1]))
@@ -150,7 +152,8 @@ multilevelannotationstep4 <- function(outloc,
                                       max_isp = 5,
                                       dbAllinf = NA,
                                       mz_rt_feature_id_map = NULL,
-                                      adduct_table = NULL) {
+                                      adduct_table = NULL,
+                                      multimer_abundance_check = TRUE) {
     chemids <- unique(chemscoremat$compound_id)
 
     # Load package adduct_table if not provided
@@ -171,7 +174,8 @@ multilevelannotationstep4 <- function(outloc,
         adduct_weights,
         max_isp,
         min_ions_perchem,
-        adduct_table
+        adduct_table,
+        multimer_abundance_check
     )
     
     chemscoremat_conf_levels <- plyr::ldply(chemscoremat_conf_levels, rbind)

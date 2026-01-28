@@ -206,6 +206,7 @@ advanced_annotation <- function(peak_table,
                                 peak_rt_width = 1,
                                 correlation_threshold = 0.7,
                                 MplusH_abundance_ratio_check = TRUE,
+                                multimer_abundance_check = TRUE,
                                 deep_split = 2,
                                 min_cluster_size = 10,
                                 maximum_isotopes = 10,
@@ -547,7 +548,8 @@ advanced_annotation <- function(peak_table,
     boostIDs = if (!is.null(boosted_compounds)) boosted_compounds else NA,
     boost.mz.diff = boost_mass_tolerance,
     boost.rt.diff = boost_time_tolerance,
-    adduct_table = adduct_table
+    adduct_table = adduct_table,
+    multimer_abundance_check = multimer_abundance_check
   )
   # ----------------------------
 
