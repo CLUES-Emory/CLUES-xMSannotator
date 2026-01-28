@@ -205,6 +205,7 @@ advanced_annotation <- function(peak_table,
                                 time_tolerance = 10,
                                 peak_rt_width = 1,
                                 correlation_threshold = 0.7,
+                                MplusH_abundance_ratio_check = TRUE,
                                 deep_split = 2,
                                 min_cluster_size = 10,
                                 maximum_isotopes = 10,
@@ -469,9 +470,11 @@ advanced_annotation <- function(peak_table,
                     annotation = annotation,
                     adduct_weights = adduct_weights,
                     corthresh = correlation_threshold,
+                    MplusH.abundance.ratio.check = MplusH_abundance_ratio_check,
                     global_cor = global_cor,
                     max_diff_rt = time_tolerance,
-                    filter.by = filter_by
+                    filter.by = filter_by,
+                    adduct_table = adduct_table
     )
   )
   # ----------------------------
@@ -543,7 +546,8 @@ advanced_annotation <- function(peak_table,
     mz_rt_feature_id_map = mz_rt_feature_id_map,
     boostIDs = if (!is.null(boosted_compounds)) boosted_compounds else NA,
     boost.mz.diff = boost_mass_tolerance,
-    boost.rt.diff = boost_time_tolerance
+    boost.rt.diff = boost_time_tolerance,
+    adduct_table = adduct_table
   )
   # ----------------------------
 
@@ -556,14 +560,25 @@ advanced_annotation <- function(peak_table,
 
   # ----------------------------
   # Permutation-based significance testing (optional)
+  # Note: This feature is in developmentand not ready for use. Do not use.
   # ----------------------------
-  if (enable_permutation) {
+  if (FALSE) {
+  #if (enable_permutation) {
+    perm_start_time <- Sys.time()
     annotation <- compute_permutation_pvalues(
       annotation = annotation,
       peak_table = peak_table,
       compound_table = compound_table,
       adduct_table = adduct_table,
+      adduct_weights = adduct_weights,
       mass_tolerance = mass_tolerance,
+      time_tolerance = time_tolerance,
+      intensity_deviation_tolerance = intensity_deviation_tolerance,
+      mass_defect_tolerance = mass_defect_tolerance,
+      isotope_mass_tolerance_ppm = isotope_mass_tolerance_ppm,
+      correlation_threshold = correlation_threshold,
+      filter_by = filter_by,
+      peak_correlation_matrix = peak_correlation_matrix,
       n_permutations = n_permutations,
       seed = permutation_seed,
       n_cores = n_workers,
@@ -573,10 +588,13 @@ advanced_annotation <- function(peak_table,
     # Output Stage4 with permutation p-values
     stage4_perm_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
     write.table(stage4_perm_output,
-                file = file.path(outloc, "Stage4_permutation_pvalues.txt"),
+                file = file.path(outloc, "Stage4_permutation_pvalues_multi.txt"),
                 sep = "\t", row.names = FALSE)
+
+    perm_end_time <- Sys.time()
+    message(sprintf("Permutation testing: %.2f minutes", difftime(perm_end_time, perm_start_time, units = "mins")))
   }
-  # ----------------------------
+  # ----------------------------     
 
   # Tool 11: print confidence distribution
   # ----------------------------
