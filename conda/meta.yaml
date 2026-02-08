@@ -1,6 +1,6 @@
-{% set name = "recetox-xmsannotator" %}
-{% set version = "0.9.1-dev" %}
-{% set github = "https://github.com/RECETOX/recetox-xMSannotator" %}
+{% set name = "clues-xmsannotator" %}
+{% set version = "0.10.0" %}
+{% set github = "https://github.com/CLUES-Emory/CLUES-xMSannotator" %}
 
 package:
   name: "r-{{ name|lower }}"
@@ -51,7 +51,7 @@ requirements:
 
 test:
   commands:
-    - $R -e "library(recetox.xmsannotator)"
+    - $R -e "library(CLUES.xMSannotator)"
 
 about:
   home: "{{ github }}"
@@ -60,6 +60,6 @@ about:
 
 extra:
   maintainers:
-    - RECETOX/conda
+    - CLUES-Emory
   identifiers:
     - doi:10.1021/acs.analchem.6b01214

@@ -1,7 +1,7 @@
 # Testing
 
 Tests are implemented using the `testthat` and `patrick` framework, which enables parameterized testcases.
-Code coverage reports for the various branches of the project are available [here](https://app.codecov.io/gh/hechth/recetox-xMSannotator) and are created with the `covr` package.
+Code coverage reports for the various branches of the project are available [here](https://app.codecov.io/gh/CLUES-Emory/CLUES-xMSannotator) and are created with the `covr` package.
 
 Larger testdata is stored on our [GitLab](https://gitlab.ics.muni.cz/umsa/umsa-files/-/tree/master/testdata/recetox-xMSannotator) and downloading of large files required for tests can be automated.
 

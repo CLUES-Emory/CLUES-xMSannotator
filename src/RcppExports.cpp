@@ -12,7 +12,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 
 // match_by_mass
 DataFrame match_by_mass(DataFrame peaks, DataFrame adducts, DataFrame compounds, double tolerance);
-RcppExport SEXP _recetox_xmsannotator_match_by_mass(SEXP peaksSEXP, SEXP adductsSEXP, SEXP compoundsSEXP, SEXP toleranceSEXP) {
+RcppExport SEXP _CLUES_xMSannotator_match_by_mass(SEXP peaksSEXP, SEXP adductsSEXP, SEXP compoundsSEXP, SEXP toleranceSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -26,11 +26,11 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_recetox_xmsannotator_match_by_mass", (DL_FUNC) &_recetox_xmsannotator_match_by_mass, 4},
+    {"_CLUES_xMSannotator_match_by_mass", (DL_FUNC) &_CLUES_xMSannotator_match_by_mass, 4},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_recetox_xmsannotator(DllInfo *dll) {
+RcppExport void R_init_CLUES_xMSannotator(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

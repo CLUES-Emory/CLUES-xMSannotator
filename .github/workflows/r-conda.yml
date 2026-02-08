@@ -33,7 +33,7 @@ jobs:
       - name: Create conda environment
         uses: conda-incubator/setup-miniconda@v2
         with:
-          activate-environment: recetox-xmsannotator-dev
+          activate-environment: clues-xmsannotator-dev
           auto-update-conda: true
           environment-file: conda/environment-dev.yaml
           auto-activate-base: false
@@ -50,5 +50,5 @@ jobs:
         run: wget -P tests/testthat/test-data/qc_matrix -i tests/remote-files/fetch_qc_matrix.txt
       - name: Test coverage
         run: |
-          conda activate recetox-xmsannotator-dev
+          conda activate clues-xmsannotator-dev
           Rscript -e "options(covr.gcov=''); covr::codecov(quiet = FALSE)"

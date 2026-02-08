@@ -2,6 +2,6 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 match_by_mass <- function(peaks, adducts, compounds, tolerance) {
-    .Call('_recetox_xmsannotator_match_by_mass', PACKAGE = 'recetox.xmsannotator', peaks, adducts, compounds, tolerance)
+    .Call('_CLUES_xMSannotator_match_by_mass', PACKAGE = 'CLUES.xMSannotator', peaks, adducts, compounds, tolerance)
 }
 

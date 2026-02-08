@@ -1,5 +1,5 @@
 library(patrick)
 library(testthat)
-library(recetox.xmsannotator)
+library(CLUES.xMSannotator)
 
-test_check("recetox.xmsannotator")
+test_check("CLUES.xMSannotator")

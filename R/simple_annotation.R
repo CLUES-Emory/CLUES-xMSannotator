@@ -55,7 +55,7 @@ compute_multiple_matches <- function(annotation) {
 #' @export
 #' @import dplyr
 #' @importFrom rlang .data
-#' @useDynLib recetox.xmsannotator
+#' @useDynLib CLUES.xMSannotator
 simple_annotation <- function(peak_table, compound_table, adduct_table = NULL, mass_tolerance = 5e-6) {
   if (is.null(adduct_table)) {
     adduct_table <- sample_adduct_table

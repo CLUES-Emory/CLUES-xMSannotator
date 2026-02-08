@@ -1,4 +1,4 @@
-name: recetox-xmsannotator-dev
+name: clues-xmsannotator-dev
 channels:
   - conda-forge
   - bioconda

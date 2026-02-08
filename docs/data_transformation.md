@@ -1,5 +1,5 @@
 ## recetox-aplcms to xMSannotator
-The recetox-aplcms tool outputs the peak table in a format which is not directly compatible with recetox-xMSannotator or xMSannotator. A conversion is required. Example file layouts are given below.
+The recetox-aplcms tool outputs the peak table in a format which is not directly compatible with CLUES.xMSannotator or xMSannotator. A conversion is required. Example file layouts are given below.
 
 ### recetox-aplcms Example Output
 
@@ -10,7 +10,7 @@ The recetox-aplcms tool outputs the peak table in a format which is not directly
 |2|	113.007573530083|	370.352087874597|	Tribrid_201005_001-MeOH_NEG_MU|	317.947801280858|	2406770.19370756|
 | ... | ... | ... | ... | ...| ... |
 
-### recetox-xMSannotator Example Input
+### CLUES.xMSannotator Example Input
 
 | peak      | mz   | rt | Tribrid_201005_001-MeOH_NEG_MU | Tribrid_201005_002-Norman_NEG_MU |
 |-----------|------|----|------------------------------------------|--------------------------------------------|
@@ -59,8 +59,8 @@ rcx_aplcms_to_xmsannotator <- function(peak_table) {
 
 ```
 
-## recetox-aplcms to recetox-xMSannotator
-This is the same as to the recetox-xMSannotator, but the `feature` column has to be renamed to peak, and `rt` can stay the same.
+## recetox-aplcms to CLUES.xMSannotator
+This is the same as to the CLUES.xMSannotator, but the `feature` column has to be renamed to peak, and `rt` can stay the same.
 
 ### R Sample Code
 
