@@ -185,7 +185,7 @@ save_parquet <- function(data, file) {
 
 #' @export
 create_adduct_weights <- function(adduct_weights, weight = 1) {
-  if (any(is.na(adduct_weights))) {
+  if (is.null(adduct_weights) || any(is.na(adduct_weights))) {
     adduct_weights <- data.frame(
       Adduct = c("M+H", "M-H"),
       Weight = c(weight, weight)

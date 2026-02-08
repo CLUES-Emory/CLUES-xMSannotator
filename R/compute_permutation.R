@@ -249,8 +249,7 @@ compute_permutation_pvalues <- function(annotation,
   reformat_correlation_matrix_fn <- reformat_correlation_matrix
   get_chemscore_fn <- get_chemscore
 
-  # Explicitly capture data frames to avoid global scope pollution
-  # (multilevelannotationstep4 calls data(adduct_table) which loads to global env)
+  # Explicitly capture data frames for forked process access
   local_adduct_table <- adduct_table
   local_compound_table <- compound_table
   local_adduct_weights <- adduct_weights
