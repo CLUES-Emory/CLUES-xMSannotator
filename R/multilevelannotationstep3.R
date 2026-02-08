@@ -225,15 +225,18 @@ sanitize_chemscoremat <- function(chemscoremat, chemCompMZ, column_names) {
 
 
 #' @importFrom dplyr left_join
-multilevelannotationstep3 <- function(chemCompMZ,
-                                      chemscoremat,
+multilevelannotationstep3 <- function(chemscoremat,
                                       adduct_weights = NA,
-                                      db_name,
+                                      db_name = "HMDB",
                                       max_diff_rt,
                                       pathwaycheckmode = "p",
                                       scorethresh = 0.1,
                                       outloc = tempdir(),
-                                      mz_rt_feature_id_map = NULL) {
+                                      mz_rt_feature_id_map = NULL,
+                                      chemCompMZ = NULL,
+                                      pathway_data = NULL,
+                                      excluded_pathways = NULL,
+                                      excluded_pathway_compounds = NULL) {
   adduct_weights <- create_adduct_weights(adduct_weights)
 
   column_names <- c(
@@ -252,16 +255,17 @@ multilevelannotationstep3 <- function(chemCompMZ,
     "MD"
   )
 
-  chemscoremat <- sanitize_chemscoremat(chemscoremat, chemCompMZ, column_names)
-
-  hmdbbad <- c("HMDB29244", "HMDB29245", "HMDB29246")
-  bad_indices <- which(chemscoremat$compound_id %in% hmdbbad)
-
-  if (length(bad_indices) > 0) {
-    chemscoremat <- chemscoremat[-bad_indices, ]
-  }
-
   if (db_name == "HMDB") {
+    # HMDB mode: existing logic
+    chemscoremat <- sanitize_chemscoremat(chemscoremat, chemCompMZ, column_names)
+
+    hmdbbad <- c("HMDB29244", "HMDB29245", "HMDB29246")
+    bad_indices <- which(chemscoremat$compound_id %in% hmdbbad)
+
+    if (length(bad_indices) > 0) {
+      chemscoremat <- chemscoremat[-bad_indices, ]
+    }
+
     data(hmdbAllinf)
     hmdbAllinfv3.5 <- hmdbAllinf[, -c(26:27)]
     rm(hmdbAllinf, envir = .GlobalEnv)
@@ -272,10 +276,30 @@ multilevelannotationstep3 <- function(chemCompMZ,
       by.y = "HMDBID"
     )
     rm(hmdbAllinfv3.5)
-    chemscoremat <- compute_score_pathways(chemscoremat, db, pathwaycheckmode, scorethresh, adduct_weights, max_diff_rt, c("-"), db_name)
+    bad_path_IDs <- c("-")
+  } else if (db_name == "custom") {
+    # Custom mode: use user-provided pathway_data
+    names(chemscoremat)[names(chemscoremat) == "cur_chem_score"] <- "score"
+
+    # Validate and filter pathway_data
+    pathway_data <- as_pathway_table(pathway_data)
+    if (!is.null(excluded_pathways)) {
+      pathway_data <- pathway_data[!pathway_data$pathway %in% excluded_pathways, ]
+    }
+    if (!is.null(excluded_pathway_compounds)) {
+      pathway_data <- pathway_data[!pathway_data$compound %in% excluded_pathway_compounds, ]
+    }
+
+    # Convert to db format: 2-column matrix (compound_id, pathway_id)
+    db <- as.matrix(pathway_data[, c("compound", "pathway")])
+    bad_path_IDs <- character(0)
   } else {
-    stop("Database other than HMDB not supported!")
+    stop("db_name must be 'HMDB' or 'custom'")
   }
+
+  chemscoremat <- compute_score_pathways(chemscoremat, db, pathwaycheckmode,
+                                          scorethresh, adduct_weights, max_diff_rt,
+                                          bad_path_IDs, db_name)
 
   chemscoremat <- replace_x_names(chemscoremat)
 
@@ -293,7 +317,8 @@ multilevelannotationstep3 <- function(chemCompMZ,
     chemscoremat <- left_join(chemscoremat, mz_rt_feature_id_map, by = c("mz", "time"))
   }
 
-  write.table(chemscoremat, file = file.path(outloc, "Stage3_correlation_scores.txt"), sep = "\t", row.names = FALSE)
+  output_file <- if (db_name == "custom") "Stage3_custom_pathways.txt" else "Stage3_HMDB_pathways.txt"
+  write.table(chemscoremat, file = file.path(outloc, output_file), sep = "\t", row.names = FALSE)
 
   return(chemscoremat)
 }

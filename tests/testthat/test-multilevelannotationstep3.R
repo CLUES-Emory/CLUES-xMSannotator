@@ -37,7 +37,7 @@ patrick::with_parameters_test_that(
       outloc = outloc
     )
 
-    actual <- read.table(file.path(outloc, "Stage3_correlation_scores.txt"), sep = "\t", header = TRUE)
+    actual <- read.table(file.path(outloc, "Stage3_HMDB_pathways.txt"), sep = "\t", header = TRUE)
 
     setwd(testthat_wd)
 

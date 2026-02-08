@@ -92,100 +92,15 @@ skip_pathway_step <- function(chemscoremat, outloc, mz_rt_feature_id_map = NULL)
   # Rename cur_chem_score to score (required by downstream functions)
   names(chemscoremat)[names(chemscoremat) == "cur_chem_score"] <- "score"
 
-  # Write output for transparency
-  output <- chemscoremat
+  # Join feature ID if mapping provided (consistent with multilevelannotationstep3)
   if (!is.null(mz_rt_feature_id_map)) {
-    output <- dplyr::left_join(output, mz_rt_feature_id_map, by = c("mz", "time"))
+    chemscoremat <- dplyr::left_join(chemscoremat, mz_rt_feature_id_map, by = c("mz", "time"))
   }
-  write.table(output, file = file.path(outloc, "Stage3_pathway_skipped.txt"),
+
+  write.table(chemscoremat, file = file.path(outloc, "Stage3_pathway_skipped.txt"),
               sep = "\t", row.names = FALSE)
 
   return(chemscoremat)
-}
-
-#' Custom pathway matching step
-#' @description Use custom pathway database for pathway scoring
-#' @param chemscoremat Chemical score matrix from get_chemscore
-#' @param pathway_data Data frame with compound-pathway mappings
-#' @param adduct_weights Adduct weights table
-#' @param excluded_pathways Pathways to exclude
-#' @param excluded_pathway_compounds Compounds to exclude
-#' @param score_threshold Score threshold for significance
-#' @param outloc Output directory
-#' @param mz_rt_feature_id_map Optional feature ID mapping
-#' @return chemscoremat with pathway scores added
-#' @importFrom magrittr %>%
-custom_pathway_step <- function(chemscoremat,
-                                pathway_data,
-                                adduct_weights,
-                                excluded_pathways = NULL,
-                                excluded_pathway_compounds = NULL,
-                                score_threshold = 0.1,
-                                outloc,
-                                mz_rt_feature_id_map = NULL) {
-
-  # Rename cur_chem_score to score
-  names(chemscoremat)[names(chemscoremat) == "cur_chem_score"] <- "score"
-
-  # Validate pathway data
-  pathway_data <- as_pathway_table(pathway_data)
-
-  # Apply exclusions
-  if (!is.null(excluded_pathways)) {
-    pathway_data <- pathway_data[!pathway_data$pathway %in% excluded_pathways, ]
-  }
-  if (!is.null(excluded_pathway_compounds)) {
-    pathway_data <- pathway_data[!pathway_data$compound %in% excluded_pathway_compounds, ]
-  }
-
-  # Map compound IDs (chemscoremat uses compound_id, pathway_data uses compound)
-  chemscoremat_for_pathways <- chemscoremat
-  names(chemscoremat_for_pathways)[names(chemscoremat_for_pathways) == "compound_id"] <- "compound"
-
-  # Find significant compounds (score >= threshold and valid adduct)
-  significant <- chemscoremat_for_pathways %>%
-    dplyr::filter(score >= score_threshold, Adduct %in% adduct_weights$adduct) %>%
-    dplyr::pull(compound) %>%
-    unique()
-
-  # Filter pathways to those with significant compounds
-  relevant_pathways <- pathway_data %>%
-    dplyr::filter(compound %in% significant)
-
-  if (nrow(relevant_pathways) > 0) {
-    # Count compounds per pathway for scoring
-    pathway_counts <- relevant_pathways %>%
-      dplyr::group_by(pathway) %>%
-      dplyr::summarise(n_compounds = dplyr::n_distinct(compound), .groups = "drop")
-
-    # Add pathway score to compounds (number of pathway co-members)
-    compound_pathway_scores <- relevant_pathways %>%
-      dplyr::left_join(pathway_counts, by = "pathway") %>%
-      dplyr::group_by(compound) %>%
-      dplyr::summarise(pathway_score = sum(n_compounds), .groups = "drop")
-
-    # Add pathway scores to chemscoremat
-    chemscoremat_for_pathways <- chemscoremat_for_pathways %>%
-      dplyr::left_join(compound_pathway_scores, by = "compound") %>%
-      dplyr::mutate(
-        pathway_score = dplyr::coalesce(pathway_score, 0),
-        score = score + pathway_score
-      ) %>%
-      dplyr::select(-pathway_score)
-  }
-
-  # Rename back to compound_id
-  names(chemscoremat_for_pathways)[names(chemscoremat_for_pathways) == "compound"] <- "compound_id"
-
-  # Write output
-  output <- chemscoremat_for_pathways
-  if (!is.null(mz_rt_feature_id_map)) {
-    output <- dplyr::left_join(output, mz_rt_feature_id_map, by = c("mz", "time"))
-  }
-  write.table(output, file = file.path(outloc, "Stage3_custom_pathways.txt"),
-              sep = "\t", row.names = FALSE)
-
-  return(chemscoremat_for_pathways)
 }
 
 #' Wrapper for the advanced annotation steps.
@@ -496,14 +411,17 @@ advanced_annotation <- function(peak_table,
       mz_rt_feature_id_map = mz_rt_feature_id_map
     )
   } else if (pathway_mode == "custom") {
-    annotation <- custom_pathway_step(
+    annotation <- multilevelannotationstep3(
       chemscoremat = annotation,
-      pathway_data = pathway_data,
       adduct_weights = adduct_weights,
-      excluded_pathways = excluded_pathways,
-      excluded_pathway_compounds = excluded_pathway_compounds,
+      db_name = "custom",
+      max_diff_rt = time_tolerance,
+      pathwaycheckmode = "pm",
       outloc = outloc,
-      mz_rt_feature_id_map = mz_rt_feature_id_map
+      mz_rt_feature_id_map = mz_rt_feature_id_map,
+      pathway_data = pathway_data,
+      excluded_pathways = excluded_pathways,
+      excluded_pathway_compounds = excluded_pathway_compounds
     )
   } else {
     # Default: HMDB pathway matching (existing behavior)
@@ -511,25 +429,15 @@ advanced_annotation <- function(peak_table,
     chemCompMZ <- dplyr::rename(hmdbCompMZ, compound_id = HMDBID)
 
     annotation <- multilevelannotationstep3(
-      chemCompMZ = chemCompMZ,
       chemscoremat = annotation,
       adduct_weights = adduct_weights,
       db_name = "HMDB",
       max_diff_rt = time_tolerance,
       pathwaycheckmode = "pm",
       outloc = outloc,
-      mz_rt_feature_id_map = mz_rt_feature_id_map
+      mz_rt_feature_id_map = mz_rt_feature_id_map,
+      chemCompMZ = chemCompMZ
     )
-  }
-  # ----------------------------
-
-  # Output Stage3b: Post-pathway matching results (HMDB mode only)
-  # Note: skip_pathway_step and custom_pathway_step write their own outputs
-  # ----------------------------
-  if (pathway_mode == "HMDB") {
-    stage3b_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
-    write.table(stage3b_output, file = file.path(outloc, "Stage3_pathway_matched.txt"),
-                sep = "\t", row.names = FALSE)
   }
   # ----------------------------
 
