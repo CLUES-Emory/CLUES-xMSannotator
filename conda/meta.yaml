@@ -1,5 +1,5 @@
 {% set name = "clues-xmsannotator" %}
-{% set version = "0.10.0" %}
+{% set version = "1.0.0" %}
 {% set github = "https://github.com/CLUES-Emory/CLUES-xMSannotator" %}
 
 package:

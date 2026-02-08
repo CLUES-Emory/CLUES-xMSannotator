@@ -1,6 +1,6 @@
 Package: CLUES.xMSannotator
 Title: Network-Based Annotation of LC-MS Data
-Version: 0.10.0
+Version: 1.0.0
 Authors@R: c(
     person("Karan", "Uppal", email = "kuppal2@emory.edu", role = "aut"),
     person("Jiri", "Novotny", email = "409963@muni.cz", role = "ctb"),

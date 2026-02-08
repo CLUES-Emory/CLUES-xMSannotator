@@ -910,4 +910,4 @@ tryCatch({
 
 *Document created: 2026-01-22*
 *Last updated: 2026-02-08*
-*For use with CLUES.xMSannotator v0.10.0*
+*For use with CLUES.xMSannotator v1.0.0*
