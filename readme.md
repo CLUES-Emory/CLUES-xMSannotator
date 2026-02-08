@@ -11,6 +11,8 @@ For more details please have a look at the [Docs](docs/).
 
 ## Summary of CLUES-Emory Changes
 
+Bug fixes, new features, and code cleanup were completed using [Claude Code](https://claude.ai/claude-code) with Claude Opus.
+
 ### New Features
 - **Custom pathways**: unified pathway scoring supports both HMDB and user-provided pathway databases via `pathway_mode` parameter
 - **Permutation testing**: permutation-based significance testing with parallel processing, precomputed isotope caching, and full/streaming methods. Note: This feature is in development and should not be used.
