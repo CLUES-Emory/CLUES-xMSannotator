@@ -31,7 +31,6 @@ For more details please have a look at the [Docs](docs/).
 
 ### Code Cleanup
 - Removed ~1500 lines of dead code not used by `advanced_annotation()` workflow (`get_confidence_stage2.R`, `multilevelannotationstep2.R`, `get_chemscorev1.6.71.R`, `group_by_rt_histv2.R`, `compute_confidence_levels.R`)
-- Renamed `multilevelannotationstep4_v2` to canonical `multilevelannotationstep4` (stripped all `_v2` suffixes)
 - Removed all `setwd()` calls from pipeline functions, replaced with `file.path()` absolute paths
 - Removed unused `ISgroup` column, redundant `time.y` column, redundant `forms_valid_adduct_pair` filter, and `remove_tmp_files()` auto-cleanup
 
