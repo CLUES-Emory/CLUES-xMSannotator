@@ -13,7 +13,7 @@ For more details please have a look at the [Docs](docs/).
 
 ### New Features
 - **Custom pathways**: unified pathway scoring supports both HMDB and user-provided pathway databases via `pathway_mode` parameter
-- **Permutation testing**: permutation-based significance testing with parallel processing, precomputed isotope caching, and full/streaming methods
+- **Permutation testing**: permutation-based significance testing with parallel processing, precomputed isotope caching, and full/streaming methods. Note: This feature is in development and should not be used.
 - **Compound ID support**: string compound IDs (e.g., "HMDB0000001") flow through the entire pipeline and appear in all output files
 - **Feature ID passthrough**: `feature_id_column` parameter preserves custom feature identifiers (e.g., "C0001") through all stages
 - **Boosted compounds**: `boosted_compounds` parameter boosts confidence of confirmed annotations to level 4, with flexible mz/rt proximity matching
