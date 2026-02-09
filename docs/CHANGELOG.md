@@ -2,8 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
 ### Added
 - Added `multimer_abundance_check` parameter to `advanced_annotation()` (default TRUE). When enabled, checks that multimer adducts (2M, 3M) have lower intensity than the monomer during confidence level assignment. If a multimer is more abundant than the monomer, the confidence level is downgraded. Set to FALSE to disable this validation. Parameter is passed through `multilevelannotationstep4()` to `get_confidence_stage4()`. (2026-01-27)
 - Added `MplusH_abundance_ratio_check` parameter to `advanced_annotation()` (default TRUE). When enabled, requires secondary adducts to have lower intensity than the primary M+H or M-H adduct during chemical scoring. Set to FALSE to disable this abundance ratio validation. Parameter is passed through to `get_chemscore()`. (2026-01-27)
