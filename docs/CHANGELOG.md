@@ -80,6 +80,7 @@ All notable changes to this project will be documented in this file.
 - Fixed duplicate `feature_id.x` and `feature_id.y` columns appearing in stage outputs. The feature_id was being joined multiple times (inside `multilevelannotationstep3()` and `multilevelannotationstep4()`, then again in stage output sections). Added `safe_join_feature_id()` helper function that skips the join if the column already exists. (2026-01-25)
 
 ### Removed
+- Removed unused `conda/` directory (`meta.yaml`, `environment-build.yaml`, `environment-dev.yaml`) and `.github/workflows/r-conda.yml` CI workflow. These were inherited from upstream RECETOX and are not needed since CLUES.xMSannotator is distributed as a standard R package only. Removed the R Conda CI badge from `readme.md` and updated setup instructions in `docs/developer_documentation.md`. (2026-02-17)
 - Removed redundant `Stage3_pathway_matched.txt` write.table from `advanced_annotation()` (HMDB mode). `multilevelannotationstep3()` already writes `Stage3_HMDB_pathways.txt` with the same data. (2026-02-08)
 - Removed `custom_pathway_step()` from `advanced_annotation.R`. Its functionality is replaced by `multilevelannotationstep3()` with `db_name = "custom"`. (2026-02-08)
 - Deleted original `multilevelannotationstep4.R` and `get_confidence_stage4.R` (now dead code, replaced by refactored v2 implementation). (2026-02-07)

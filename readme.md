@@ -1,4 +1,3 @@
-[![R Conda](https://github.com/CLUES-Emory/CLUES-xMSannotator/actions/workflows/r-conda.yml/badge.svg?branch=main)](https://github.com/CLUES-Emory/CLUES-xMSannotator/actions/workflows/r-conda.yml)
 ![GitHub R package version (branch & subdirectory of monorepo)](https://img.shields.io/github/r-package/v/CLUES-Emory/CLUES-xMSannotator/main?filename=DESCRIPTION)
 
 # CLUES.xMSannotator
