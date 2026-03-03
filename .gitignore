@@ -1,8 +1,4 @@
 .vscode
+.DS_Store
 *.Rcheck
-*.Rd
 .Rhistory
-xmsannotator/tests/testthat/test-data/batch1_neg
-xmsannotator/tests/testthat/test-data/qc_matrix
-xmsannotator/tests/testthat/test-data/qc_solvent
-xmsannotator/tests/testthat/test-data/sourceforge

@@ -1,1 +1,7 @@
 ^LICENSE\.md$
+^\.DS_Store$
+^\.github$
+^docs$
+^Dockerfile$
+^\.gitignore$
+^readme\.md$

@@ -1,3 +1,12 @@
+#' Group peaks by retention time proximity
+#'
+#' Assigns peaks to retention time groups based on a sliding time window.
+#'
+#' @param subdata Data frame with at least mz and time columns.
+#' @param time_step Time step window for grouping peaks (seconds).
+#' @param max.rt.diff Maximum retention time difference (seconds).
+#' @param groupnum Group number prefix for labeling RT clusters.
+#' @return Data frame with a Module_RTclust column identifying each group.
 #' @export
 group_by_rt <-
 function(subdata,time_step=1,max.rt.diff=5,groupnum){

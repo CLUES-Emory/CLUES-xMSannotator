@@ -52,6 +52,19 @@ compute_multiple_matches <- function(annotation) {
   annotation
 }
 
+#' Annotate peaks by mass matching against a compound database
+#'
+#' Matches peaks to compounds based on m/z values and adduct transformations,
+#' then filters results using Golden Rules for molecular formula validation
+#' and valid adduct pair checks.
+#'
+#' @param peak_table Data frame with columns: peak, mz, rt.
+#' @param compound_table Data frame with columns: monoisotopic_mass,
+#'   molecular_formula, compound (or compound_id), name.
+#' @param adduct_table Data frame with columns: adduct, charge, factor, mass.
+#'   If NULL, the package default adduct table is used.
+#' @param mass_tolerance Mass tolerance as a fraction (e.g., 5e-6 for 5 ppm).
+#' @return Data frame of annotations with peak, compound, adduct, and mz columns.
 #' @export
 #' @import dplyr
 #' @importFrom rlang .data

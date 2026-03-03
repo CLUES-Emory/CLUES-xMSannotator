@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed
+- Fixed `.gitignore` which contained `*.Rd` pattern blocking all man pages from being committed. Removed stale `xmsannotator/` paths and added `.DS_Store` exclusion. (2026-03-03)
+- Added roxygen2 documentation to 13 exported functions that lacked man pages: `simple_annotation`, `get_chemscore`, `compute_chemical_score`, `add_isotopic_peaks`, `remove_water_adducts`, `create_adduct_weights`, `group_by_rt`, `load_peak_table_parquet`, `load_adduct_table_parquet`, `load_compound_table_parquet`, `load_expected_adducts_csv`, `load_boost_compounds_csv`, `save_parquet`. (2026-03-03)
+- Updated `.Rbuildignore` to exclude non-package files (`.github`, `docs/`, `Dockerfile`, `.DS_Store`, `.gitignore`, `readme.md`) from the package tarball. (2026-03-03)
+- Deleted 4 orphaned `.Rd` files for removed/internal functions: `custom_pathway_step.Rd`, `compute_boosted_confidences.Rd`, `get_confidence_stage2.Rd`, `group_by_rt_histv2.Rd`. (2026-03-03)
+- Regenerated all `man/*.Rd` files via `roxygen2::roxygenise()`. (2026-03-03)
+
 ### Added
 - Added `multimer_abundance_check` parameter to `advanced_annotation()` (default TRUE). When enabled, checks that multimer adducts (2M, 3M) have lower intensity than the monomer during confidence level assignment. If a multimer is more abundant than the monomer, the confidence level is downgraded. Set to FALSE to disable this validation. Parameter is passed through `multilevelannotationstep4()` to `get_confidence_stage4()`. (2026-01-27)
 - Added `MplusH_abundance_ratio_check` parameter to `advanced_annotation()` (default TRUE). When enabled, requires secondary adducts to have lower intensity than the primary M+H or M-H adduct during chemical scoring. Set to FALSE to disable this abundance ratio validation. Parameter is passed through to `get_chemscore()`. (2026-01-27)

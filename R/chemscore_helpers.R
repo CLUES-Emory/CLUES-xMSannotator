@@ -15,6 +15,7 @@ replace_with_module <- function(module_rt_clust) {
 #' @param max_diff_rt Maximum RT difference
 #' @param groupnum Group number prefix
 #' @return Data frame with updated Module_RTclust
+#' @noRd
 group_by_rt_histv2 <- function(mchemicaldata, time_step = 1, max_diff_rt = 10, groupnum) {
   range1 <- range(mchemicaldata$time)
   diff1 <- abs(range1[1] - range1[2])
@@ -85,6 +86,7 @@ group_by_rt_histv2 <- function(mchemicaldata, time_step = 1, max_diff_rt = 10, g
 #' @param adduct_weights Adduct weights
 #' @param max_diff_rt Maximum RT difference
 #' @return Confidence score level (0-3)
+#' @noRd
 get_confidence_stage2 <- function(curdata, adduct_weights = NA, max_diff_rt = 10, adduct_table) {
   curdata <- curdata[order(curdata$Adduct), ]
   cur_adducts_with_isotopes <- curdata$Adduct
@@ -197,6 +199,14 @@ compute_score <- function(adduct_weights, cur_adducts_with_isotopes) {
   return(score[1])
 }
 
+#' Remove water-loss adducts for compounds without oxygen
+#'
+#' Filters out water-loss adducts (M+H-H2O, M+H-2H2O, M-H2O-H) when the
+#' molecular formula contains no oxygen atoms.
+#'
+#' @param curformula Character string of the molecular formula.
+#' @param mchemicaldata Data frame with an Adduct column.
+#' @return Filtered data frame with invalid water adducts removed.
 #' @export
 remove_water_adducts <- function(curformula, mchemicaldata) {
   numoxygen <- check_element(curformula, "O")
@@ -212,6 +222,22 @@ remove_water_adducts <- function(curformula, mchemicaldata) {
   return(mchemicaldata)
 }
 
+#' Add isotopic peaks to annotation data
+#'
+#' Identifies and appends isotopic peak annotations for each adduct in the
+#' chemical data using molecular formula to compute expected isotope patterns.
+#'
+#' @param mchemicaldata Data frame of annotated chemical data.
+#' @param adduct_weights Data frame with adduct names and their weights.
+#' @param exp_isp Expected isotope indices.
+#' @param level_module_isop_annot Data frame of module-level isotope annotations.
+#' @param max_diff_rt Maximum retention time difference (seconds).
+#' @param mass_defect_window Mass defect window for filtering.
+#' @param mass_defect_mode Mass defect mode for filtering.
+#' @param max_isp Maximum number of isotope peaks to consider.
+#' @param abund_ratio_vec Abundance ratio vector.
+#' @param outlocorig Output directory path, or NULL to skip writing.
+#' @return Data frame with isotopic peak rows appended.
 #' @export
 #' @importFrom Rdisop getMolecule
 add_isotopic_peaks <- function(mchemicaldata,
@@ -885,6 +911,21 @@ compute_table_mod <- function(data) {
   return(table_mod)
 }
 
+#' Compute chemical score for annotated peaks
+#'
+#' Evaluates annotation quality by analyzing RT module clustering, adduct
+#' patterns, and correlation structure. Returns the best-scoring module data.
+#'
+#' @param mchemicaldata Data frame with Module_RTclust, Adduct, mz columns.
+#' @param adduct_weights Data frame with adduct names and weights.
+#' @param global_cor Global correlation matrix between peaks.
+#' @param corthresh Correlation threshold for filtering.
+#' @param filter.by Character vector of expected adducts.
+#' @param max_diff_rt Maximum retention time difference (seconds).
+#' @param chemicalid Chemical (compound) identifier.
+#' @param MplusH.abundance.ratio.check Logical; check primary adduct abundance.
+#' @param adduct_table Data frame of adduct definitions.
+#' @return List with chemical_score (numeric) and filtdata (data frame).
 #' @export
 compute_chemical_score <- function(mchemicaldata,
                                    adduct_weights,

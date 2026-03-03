@@ -1,4 +1,22 @@
 
+#' Compute chemical score for a single compound
+#'
+#' Filters annotation data for a given compound within a retention time window,
+#' separates isotopic from monoisotopic peaks, scores monoisotopic peaks, and
+#' applies a 100x boost when isotope evidence is present.
+#'
+#' @param ... Named arguments passed as a query row (must include compound_id, time).
+#' @param annotation Data frame of annotations from simple_annotation.
+#' @param corthresh Correlation threshold for peak module filtering.
+#' @param global_cor Global correlation matrix between peaks.
+#' @param max_diff_rt Maximum retention time difference for grouping (seconds).
+#' @param adduct_weights Data frame with adduct names and their weights.
+#' @param filter.by Character vector of expected adducts.
+#' @param mass_defect_window Mass defect window for isotope filtering.
+#' @param MplusH.abundance.ratio.check Logical; if TRUE, check that secondary
+#'   adducts have lower intensity than the primary M+H or M-H adduct.
+#' @param adduct_table Data frame with adduct definitions.
+#' @return Data frame with chemical scores, or NULL if no valid data.
 #' @import tidyr
 #' @import dplyr
 #' @importFrom magrittr %>%

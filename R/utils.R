@@ -148,41 +148,86 @@ load_csv <- function (file, columns) {
   data <- select(data, any_of(columns))
 }
 
+#' Load peak table from a Parquet file
+#'
+#' Reads a Parquet file and validates it as a peak table with required columns.
+#'
+#' @param file Path to the Parquet file.
+#' @return Validated peak table data frame with peak, mz, rt, and intensity columns.
 #' @export
 load_peak_table_parquet <- function(file) {
   data <- arrow::read_parquet(file)
   as_peak_table(data, intensities = TRUE)
 }
 
+#' Load adduct table from a Parquet file
+#'
+#' Reads a Parquet file and validates it as an adduct table.
+#'
+#' @param file Path to the Parquet file.
+#' @return Validated adduct table data frame with adduct, charge, factor, mass columns.
 #' @export
 load_adduct_table_parquet <- function(file) {
   data <- arrow::read_parquet(file)
   as_adduct_table(data)
 }
 
+#' Load compound table from a Parquet file
+#'
+#' Reads a Parquet file and validates it as a compound table.
+#'
+#' @param file Path to the Parquet file.
+#' @return Validated compound table data frame.
 #' @export
 load_compound_table_parquet <- function(file) {
   data <- arrow::read_parquet(file)
   as_compound_table(data)
 }
 
+#' Load expected adducts from a CSV file
+#'
+#' Reads a CSV file and extracts the adduct column.
+#'
+#' @param file Path to the CSV file containing an adduct column.
+#' @return Data frame with a single adduct column.
 #' @export
 load_expected_adducts_csv <- function (file) {
   data <- load_csv(file, columns = "adduct")
   as_expected_adducts_table(data)
 }
 
+#' Load boost compounds from a CSV file
+#'
+#' Reads a CSV file with compound identifiers for confidence boosting.
+#'
+#' @param file Path to the CSV file with compound_id, mz, and rt columns.
+#' @return Validated boosted compounds table.
 #' @export
 load_boost_compounds_csv <- function (file) {
   data <- load_csv(file, columns = c("compound", "mz", "rt"))
   as_boosted_compounds_table(data)
 }
 
+#' Save data frame to a Parquet file
+#'
+#' Writes a data frame to disk in Apache Parquet format.
+#'
+#' @param data Data frame to save.
+#' @param file Path to the output Parquet file.
+#' @return Invisible NULL.
 #' @export
 save_parquet <- function(data, file) {
   invisible(arrow::write_parquet(data, file))
 }
 
+#' Create default adduct weights table
+#'
+#' Returns the provided adduct weights, or creates a default table with M+H and
+#' M-H if the input is NULL or NA.
+#'
+#' @param adduct_weights Existing adduct weights data frame, or NULL/NA.
+#' @param weight Default weight value for M+H and M-H adducts.
+#' @return Data frame with Adduct and Weight columns.
 #' @export
 create_adduct_weights <- function(adduct_weights, weight = 1) {
   if (is.null(adduct_weights) || any(is.na(adduct_weights))) {
