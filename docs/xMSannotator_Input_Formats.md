@@ -654,6 +654,7 @@ The `advanced_annotation()` function accepts the following parameters:
 | `filter_by` | character vector | `c("M-H", "M+H")` | Primary adducts for confidence scoring |
 | `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
 | `redundancy_filtering` | logical | `TRUE` | Whether to remove redundant annotations |
+| `identify_isotopologues_flag` | logical | `TRUE` | Use enviPat to identify specific isotopologue substitutions (e.g., 13C:1 vs 15N:1) for isotope peaks. Adds `isotopologue` and `isotopologue_quality` columns to output. Requires `enviPat` package; gracefully skips if not installed. |
 | `pathway_mode` | character | `"HMDB"` | Pathway matching mode: "HMDB" (default), "custom", or "skip" |
 | `pathway_data` | data.frame | `NULL` | Custom pathway-compound mappings (required if pathway_mode = "custom") |
 | `excluded_pathways` | character vector | `NULL` | Pathways to exclude from analysis |
@@ -909,5 +910,5 @@ tryCatch({
 ---
 
 *Document created: 2026-01-22*
-*Last updated: 2026-02-08*
+*Last updated: 2026-03-04*
 *For use with CLUES.xMSannotator v1.0.0*

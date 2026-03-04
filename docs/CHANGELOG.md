@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+### Fixed
+- Fixed duplicate `feature_id` columns (`feature_id.x`, `feature_id.y`, `feature_id`) in Stage 4/5 output. The `feature_id` join was performed inside `skip_pathway_step()`, `multilevelannotationstep3()`, and `multilevelannotationstep4()`, then again by `safe_join_feature_id()` in `advanced_annotation()`, causing `dplyr::left_join()` to create `.x`/`.y` suffixes. Removed redundant joins from the three internal functions; `safe_join_feature_id()` now handles all feature_id joining at output stages. (2026-03-04)
+- Suppressed enviPat "NOTE: You are sure that is the mass of an electrone?" message in `get_isotopologue_labels()` by explicitly passing `emass = 0.00054857990924` to `isopattern()`. (2026-03-04)
+
 ### Changed
 - Fixed `.gitignore` which contained `*.Rd` pattern blocking all man pages from being committed. Removed stale `xmsannotator/` paths and added `.DS_Store` exclusion. (2026-03-03)
 - Added roxygen2 documentation to 13 exported functions that lacked man pages: `simple_annotation`, `get_chemscore`, `compute_chemical_score`, `add_isotopic_peaks`, `remove_water_adducts`, `create_adduct_weights`, `group_by_rt`, `load_peak_table_parquet`, `load_adduct_table_parquet`, `load_compound_table_parquet`, `load_expected_adducts_csv`, `load_boost_compounds_csv`, `save_parquet`. (2026-03-03)
@@ -10,6 +14,9 @@ All notable changes to this project will be documented in this file.
 - Regenerated all `man/*.Rd` files via `roxygen2::roxygenise()`. (2026-03-03)
 
 ### Added
+- Added isotopologue identification step (Tool 10b) to `advanced_annotation()`. After confidence level assignment, uses `enviPat::isopattern()` to identify which specific isotope substitution each isotope peak corresponds to (e.g., 13C:1 vs 15N:1 for M+1 peaks). Adds two columns to output: `isotopologue` (identity label) and `isotopologue_quality` ("confirmed" if both m/z and abundance match, "mz_only" if only m/z matches). Uses `isotope_mass_tolerance` for ppm cutoff and `intensity_deviation_tolerance` for abundance validation. Requires `enviPat` package (Suggests dependency); gracefully skips if not installed. New `identify_isotopologues_flag` parameter (default TRUE) to enable/disable. (2026-03-04)
+- Added `get_monoisotopic_names()` internal helper to `compute_isotopes.R` for identifying monoisotopic element names from enviPat column headers. (2026-03-04)
+- Added `identify_isotopologues.R` with `identify_isotopologues()` and `get_isotopologue_labels()` functions. (2026-03-04)
 - Added `multimer_abundance_check` parameter to `advanced_annotation()` (default TRUE). When enabled, checks that multimer adducts (2M, 3M) have lower intensity than the monomer during confidence level assignment. If a multimer is more abundant than the monomer, the confidence level is downgraded. Set to FALSE to disable this validation. Parameter is passed through `multilevelannotationstep4()` to `get_confidence_stage4()`. (2026-01-27)
 - Added `MplusH_abundance_ratio_check` parameter to `advanced_annotation()` (default TRUE). When enabled, requires secondary adducts to have lower intensity than the primary M+H or M-H adduct during chemical scoring. Set to FALSE to disable this abundance ratio validation. Parameter is passed through to `get_chemscore()`. (2026-01-27)
 - Added permutation-based significance testing to `advanced_annotation()`. New parameters: `enable_permutation` (default FALSE), `n_permutations` (default 1000), `permutation_method` (default "full"), `permutation_seed` (42). When enabled, computes p-values by permuting m/z values across peaks to generate null distributions, then outputs `Stage4_permutation_pvalues_multi.txt` with a `perm_pvalue` column. Uses parallel processing via `n_workers` parameter. Two methods available: "full" (all permutations in parallel, faster) and "streaming" (chunked processing, lower memory). Note: permutation testing is currently disabled/in development and not ready for production use. (2026-01-26)

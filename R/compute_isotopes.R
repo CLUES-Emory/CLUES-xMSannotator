@@ -1,3 +1,23 @@
+#' Identify monoisotopic element names from enviPat column headers.
+#'
+#' enviPat returns columns like "12C", "13C", "1H", "2H", "14N", "15N", etc.
+#' This function returns the names of the most abundant (monoisotopic) isotope
+#' for each element, so that heavy isotope substitutions can be identified.
+#'
+#' @param element_cols Character vector of enviPat element column names.
+#' @return Character vector of monoisotopic element names present in the input.
+#' @keywords internal
+get_monoisotopic_names <- function(element_cols) {
+  mono_isotopes <- c(
+    "1H", "12C", "14N", "16O", "19F", "23Na", "28Si", "31P", "32S",
+    "35Cl", "39K", "40Ca", "56Fe", "63Cu", "64Zn", "79Br", "80Se",
+    "127I", "7Li", "11B", "24Mg", "27Al", "48Ti", "52Cr", "55Mn",
+    "58Ni", "75As", "96Mo", "107Ag", "114Cd", "120Sn", "121Sb",
+    "130Te", "138Ba", "184W", "195Pt", "197Au", "202Hg", "208Pb"
+  )
+  intersect(element_cols, mono_isotopes)
+}
+
 #' Compute isotopic pattern of a given molecule.
 #'
 #' @param formula A string containing molecular or empirical formula of a compound.

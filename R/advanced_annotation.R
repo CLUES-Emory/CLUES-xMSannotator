@@ -92,11 +92,6 @@ skip_pathway_step <- function(chemscoremat, outloc, mz_rt_feature_id_map = NULL)
   # Rename cur_chem_score to score (required by downstream functions)
   names(chemscoremat)[names(chemscoremat) == "cur_chem_score"] <- "score"
 
-  # Join feature ID if mapping provided (consistent with multilevelannotationstep3)
-  if (!is.null(mz_rt_feature_id_map)) {
-    chemscoremat <- dplyr::left_join(chemscoremat, mz_rt_feature_id_map, by = c("mz", "time"))
-  }
-
   write.table(chemscoremat, file = file.path(outloc, "Stage3_pathway_skipped.txt"),
               sep = "\t", row.names = FALSE)
 
@@ -137,6 +132,7 @@ advanced_annotation <- function(peak_table,
                                 boost_match_by = c("mz", "rt"),
                                 boost_mass_tolerance = NULL,
                                 boost_time_tolerance = NULL,
+                                identify_isotopologues_flag = TRUE,
                                 enable_permutation = FALSE,
                                 n_permutations = 1000,
                                 permutation_method = "full",
@@ -459,6 +455,18 @@ advanced_annotation <- function(peak_table,
     adduct_table = adduct_table,
     multimer_abundance_check = multimer_abundance_check
   )
+  # ----------------------------
+
+  # Tool 10b: Identify isotopologues
+  # ----------------------------
+  if (identify_isotopologues_flag) {
+    annotation <- identify_isotopologues(
+      annotation,
+      adduct_table = adduct_table,
+      isotope_mass_tolerance_ppm = isotope_mass_tolerance_ppm,
+      intensity_deviation_tolerance = intensity_deviation_tolerance
+    )
+  }
   # ----------------------------
 
   # Output Stage4: Confidence level results

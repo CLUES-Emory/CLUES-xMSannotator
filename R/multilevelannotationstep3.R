@@ -312,11 +312,6 @@ multilevelannotationstep3 <- function(chemscoremat,
     chemscoremat <- chemscoremat[, column_names]
   }
 
-  # Join feature ID column if mapping provided
-  if (!is.null(mz_rt_feature_id_map) && length(chemscoremat) > 0) {
-    chemscoremat <- left_join(chemscoremat, mz_rt_feature_id_map, by = c("mz", "time"))
-  }
-
   output_file <- if (db_name == "custom") "Stage3_custom_pathways.txt" else "Stage3_HMDB_pathways.txt"
   write.table(chemscoremat, file = file.path(outloc, output_file), sep = "\t", row.names = FALSE)
 

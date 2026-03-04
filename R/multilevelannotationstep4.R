@@ -799,15 +799,6 @@ multilevelannotationstep4 <- function(outloc,
     chemscoremat_with_confidence$mz %in% unique_mz, "Unique", "Multiple"
   )
 
-  # Join feature ID column if provided
-  if (!is.null(mz_rt_feature_id_map)) {
-    chemscoremat_with_confidence <- left_join(
-      chemscoremat_with_confidence,
-      mz_rt_feature_id_map,
-      by = c("mz", "time")
-    )
-  }
-
   # Write output
   write.table(
     chemscoremat_with_confidence,
