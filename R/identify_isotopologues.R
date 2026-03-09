@@ -67,12 +67,10 @@ identify_isotopologues <- function(annotation,
                                    adduct_table,
                                    isotope_mass_tolerance_ppm = NULL,
                                    intensity_deviation_tolerance = 0.3) {
+  # enviPat is a required dependency (Imports) so this should never trigger
   if (!requireNamespace("enviPat", quietly = TRUE)) {
-    message("enviPat package not installed; skipping isotopologue identification. ",
-            "Install with: install.packages('enviPat')")
-    annotation$isotopologue <- NA_character_
-    annotation$isotopologue_quality <- NA_character_
-    return(annotation)
+    stop("enviPat package is required but not installed. ",
+         "Install with: install.packages('enviPat')")
   }
 
   annotation$isotopologue <- NA_character_

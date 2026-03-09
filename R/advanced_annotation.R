@@ -133,10 +133,6 @@ advanced_annotation <- function(peak_table,
                                 boost_mass_tolerance = NULL,
                                 boost_time_tolerance = NULL,
                                 identify_isotopologues_flag = TRUE,
-                                enable_permutation = FALSE,
-                                n_permutations = 1000,
-                                permutation_method = "full",
-                                permutation_seed = 42,
                                 outloc = tempdir(),
                                 n_workers = parallel::detectCores()) {
   if (is.null(adduct_table)) {
@@ -475,44 +471,6 @@ advanced_annotation <- function(peak_table,
   write.table(stage4_output, file = file.path(outloc, "Stage4_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
-
-  # ----------------------------
-  # Permutation-based significance testing (optional)
-  # Note: This feature is in developmentand not ready for use. Do not use.
-  # ----------------------------
-  if (FALSE) {
-  #if (enable_permutation) {
-    perm_start_time <- Sys.time()
-    annotation <- compute_permutation_pvalues(
-      annotation = annotation,
-      peak_table = peak_table,
-      compound_table = compound_table,
-      adduct_table = adduct_table,
-      adduct_weights = adduct_weights,
-      mass_tolerance = mass_tolerance,
-      time_tolerance = time_tolerance,
-      intensity_deviation_tolerance = intensity_deviation_tolerance,
-      mass_defect_tolerance = mass_defect_tolerance,
-      isotope_mass_tolerance_ppm = isotope_mass_tolerance_ppm,
-      correlation_threshold = correlation_threshold,
-      filter_by = filter_by,
-      peak_correlation_matrix = peak_correlation_matrix,
-      n_permutations = n_permutations,
-      seed = permutation_seed,
-      n_cores = n_workers,
-      method = permutation_method
-    )
-
-    # Output Stage4 with permutation p-values
-    stage4_perm_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
-    write.table(stage4_perm_output,
-                file = file.path(outloc, "Stage4_permutation_pvalues_multi.txt"),
-                sep = "\t", row.names = FALSE)
-
-    perm_end_time <- Sys.time()
-    message(sprintf("Permutation testing: %.2f minutes", difftime(perm_end_time, perm_start_time, units = "mins")))
-  }
-  # ----------------------------     
 
   # Tool 11: print confidence distribution
   # ----------------------------

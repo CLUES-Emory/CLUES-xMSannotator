@@ -2,7 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed
+- Replaced `rcdk` (Java/rJava dependency) with `enviPat` for isotope pattern calculations. `compute_isotopic_pattern()` and `precompute_isotope_patterns()` now use `enviPat::isopattern()` instead of `rcdk::get.formula()`/`rcdk::get.isotopes.pattern()`. This eliminates the rJava dependency entirely — no JDK, `JAVA_HOME`, or `R CMD javareconf` required. `enviPat` moved from Suggests to Imports; `rcdk` removed from Imports. Isotope pattern output format (mass, abund, mass_number_difference, exact_mass_diff) is preserved. Test data regenerated to match enviPat output values. (2026-03-04)
+
+### Removed
+- Removed experimental permutation-based p-value testing. Deleted `R/compute_permutation.R` (~650 lines, 6 functions: `compute_permutation_pvalues()`, `precompute_isotope_patterns()`, `detect_isotopic_peaks_cached()`, `compute_isotopes_with_cache()`, `compute_full_pvalues()`, `compute_streaming_pvalues()`). Removed `enable_permutation`, `n_permutations`, `permutation_method`, `permutation_seed` parameters from `advanced_annotation()`. Deleted 6 man pages and 2 planning documents. The feature was disabled (`if (FALSE)`) and never production-ready. (2026-03-05)
+
 ### Fixed
+- Fixed crash on charged molecular formulas (e.g., `C12H14N2+2` for Paraquat) after rcdk → enviPat migration. enviPat cannot parse charge notation in formulas unlike rcdk/CDK. Added `strip_formula_charge()` to remove charge suffixes before calling `enviPat::isopattern()` (charge doesn't affect isotope patterns). Also added `tryCatch` safety net in `detect_isotopic_peaks()` to gracefully skip any other unparseable formulas instead of crashing the entire annotation run. (2026-03-04)
 - Fixed duplicate `feature_id` columns (`feature_id.x`, `feature_id.y`, `feature_id`) in Stage 4/5 output. The `feature_id` join was performed inside `skip_pathway_step()`, `multilevelannotationstep3()`, and `multilevelannotationstep4()`, then again by `safe_join_feature_id()` in `advanced_annotation()`, causing `dplyr::left_join()` to create `.x`/`.y` suffixes. Removed redundant joins from the three internal functions; `safe_join_feature_id()` now handles all feature_id joining at output stages. (2026-03-04)
 - Suppressed enviPat "NOTE: You are sure that is the mass of an electrone?" message in `get_isotopologue_labels()` by explicitly passing `emass = 0.00054857990924` to `isopattern()`. (2026-03-04)
 

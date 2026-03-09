@@ -663,12 +663,8 @@ The `advanced_annotation()` function accepts the following parameters:
 | `boost_match_by` | character vector | `c("mz", "rt")` | Which columns to use for boost matching: `c("mz")`, `c("rt")`, or `c("mz", "rt")` |
 | `boost_mass_tolerance` | numeric | same as `mass_tolerance` | Fractional tolerance for boost mz matching (e.g., `5e-6` = 5 ppm) |
 | `boost_time_tolerance` | numeric | same as `time_tolerance` | Seconds tolerance for boost RT matching |
-| `enable_permutation` | logical | `FALSE` | Enable permutation-based p-value calculation for annotation scores |
-| `n_permutations` | integer | `1000` | Number of permutations for significance testing |
-| `permutation_method` | character | `"full"` | Permutation method: `"full"` (all permutations in parallel, faster) or `"streaming"` (chunked processing, lower memory) |
-| `permutation_seed` | integer | `42` | Random seed for reproducibility of permutation results |
 | `outloc` | character | `tempdir()` | Output directory for intermediate files |
-| `n_workers` | integer | `detectCores()` | Number of parallel workers for WGCNA and permutation testing |
+| `n_workers` | integer | `detectCores()` | Number of parallel workers for WGCNA |
 
 **Note on mass tolerance format:** All mass tolerance parameters (`mass_tolerance`, `isotope_mass_tolerance`) use fractional (relative) tolerance notation:
 - `5e-6` = 5 ppm (5 parts per million)
@@ -747,31 +743,6 @@ result <- advanced_annotation(
   pathway_mode = "skip"
 )
 # Annotations matching validated compounds will have Confidence=4 and score×100
-
-# Run with permutation-based significance testing (full parallel method - default)
-result <- advanced_annotation(
-  peak_table = my_peaks,
-  compound_table = my_compounds,
-  enable_permutation = TRUE,          # Enable p-value calculation
-  n_permutations = 1000,              # Number of permutations (use 100 for quick tests)
-  permutation_method = "full",        # All permutations in parallel (default, faster)
-  permutation_seed = 42,              # For reproducibility
-  n_workers = 4,                      # Parallel processing
-  outloc = "output/"
-)
-# Result will have perm_pvalue column
-# Creates Stage4_permutation_pvalues.txt in addition to Stage4_confidence_levels.txt
-
-# For large datasets with memory constraints, use streaming method
-result <- advanced_annotation(
-  peak_table = my_peaks,
-  compound_table = my_compounds,
-  enable_permutation = TRUE,
-  n_permutations = 1000,
-  permutation_method = "streaming",   # Process in chunks (lower memory usage)
-  n_workers = 4,
-  outloc = "output/"
-)
 ```
 
 ---

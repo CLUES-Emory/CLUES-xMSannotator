@@ -18,6 +18,20 @@ get_monoisotopic_names <- function(element_cols) {
   intersect(element_cols, mono_isotopes)
 }
 
+#' Strip charge notation from a molecular formula.
+#'
+#' enviPat only accepts pure elemental formulas. Charged formulas like
+#' "C12H14N2+2" (Paraquat dication) need the charge suffix removed.
+#' The charge doesn't affect isotopic patterns (only missing electrons
+#' at ~0.00055 amu each, which cancel out in mass differences).
+#'
+#' @param formula A molecular formula string, possibly with charge suffix.
+#' @return The formula with any trailing charge notation removed.
+#' @keywords internal
+strip_formula_charge <- function(formula) {
+  sub("[+-]\\d*$", "", formula)
+}
+
 #' Compute isotopic pattern of a given molecule.
 #'
 #' @param formula A string containing molecular or empirical formula of a compound.
@@ -30,13 +44,25 @@ get_monoisotopic_names <- function(element_cols) {
 #'
 #' @export
 #' @import dplyr
-#' @importFrom rcdk get.formula get.isotopes.pattern
 compute_isotopic_pattern <- function(formula, minAbund = 0.001) {
-  formula <- get.formula(formula)
-  isotopes <- get.isotopes.pattern(formula, minAbund)
-  isotopes <- as_tibble(isotopes)
-  isotopes <- arrange(isotopes, desc(abund))
-  isotopes <- mutate(isotopes,
+  formula <- strip_formula_charge(formula)
+  data(isotopes, package = "enviPat", envir = environment())
+  ep_result <- suppressMessages(enviPat::isopattern(
+    isotopes, formula,
+    threshold = minAbund * 100,
+    charge = FALSE,
+    emass = 0.00054857990924,
+    verbose = FALSE
+  ))
+  ep_matrix <- ep_result[[1]]
+
+  isotopes_df <- tibble(
+    mass = as.numeric(ep_matrix[, 1]),
+    abund = as.numeric(ep_matrix[, 2])
+  )
+  isotopes_df <- mutate(isotopes_df, abund = abund / max(abund))
+  isotopes_df <- arrange(isotopes_df, desc(abund))
+  isotopes_df <- mutate(isotopes_df,
     mass_number_difference = round(mass - mass[1]),
     exact_mass_diff = mass - mass[1]
   )
@@ -153,7 +179,13 @@ detect_isotopic_peaks <- function(...,
                                   rt_tolerance,
                                   isotope_mass_tolerance_ppm = NULL) {
   query <- tibble(...)
-  isotopic_pattern <- compute_isotopic_pattern(query$molecular_formula)
+  isotopic_pattern <- tryCatch(
+    compute_isotopic_pattern(query$molecular_formula),
+    error = function(e) NULL
+  )
+  if (is.null(isotopic_pattern)) {
+    return(tibble())
+  }
 
   isotopes <- filter_isotopes(
     query,

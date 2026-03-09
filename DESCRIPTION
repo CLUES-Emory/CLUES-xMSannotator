@@ -17,7 +17,7 @@ RoxygenNote: 7.3.3
 Depends: 
     R (>= 4.1.1),
     Rcpp (>= 0.11.0)
-Imports: 
+Imports:
     plyr (>= 1.8.6),
     dplyr (>= 1.0.0),
     rlang,
@@ -28,17 +28,16 @@ Imports:
     RANN (>= 2.6.1),
     pastecs (>= 1.3.21),
     purrr (>= 0.3.4),
-    rcdk (>= 3.5.0),
     magrittr,
     rlist (>= 0.4.6.2),
     Rdisop,
     foreach,
-    tibble (>= 3.1.5)
+    tibble (>= 3.1.5),
+    enviPat
 Suggests:
     testthat (>= 3.0.0),
     arrow (>= 9.0.0),
     arrow (<= 10.0.0),
-    enviPat,
     entropy (>= 1.3.1),
     gplots,
     readr (>= 2.0.2),

@@ -35,10 +35,7 @@ advanced_annotation(
   boost_match_by = c("mz", "rt"),
   boost_mass_tolerance = NULL,
   boost_time_tolerance = NULL,
-  enable_permutation = FALSE,
-  n_permutations = 1000,
-  permutation_method = "full",
-  permutation_seed = 42,
+  identify_isotopologues_flag = TRUE,
   outloc = tempdir(),
   n_workers = parallel::detectCores()
 )
