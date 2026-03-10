@@ -91,6 +91,36 @@ count_filter_matches <- function(adducts, filter.by) {
   sum(adducts %in% filter.by)
 }
 
+#' Check if a compound has module and RT coherence
+#' Single-row compounds are trivially coherent.
+#' @param curdata Data frame of annotations for one compound
+#' @param max.rt.diff Maximum RT difference threshold (seconds)
+#' @return TRUE if coherent, FALSE otherwise
+check_compound_coherence <- function(curdata, max.rt.diff) {
+  if (nrow(curdata) <= 1) return(TRUE)
+  # Module coherence: all rows in same module (part before "_" in Module_RTclust)
+  modules <- gsub(as.character(curdata$Module_RTclust), pattern = "_[0-9]*", replacement = "")
+  if (length(unique(modules)) > 1) return(FALSE)
+  # RT coherence
+  if (max(curdata$time) - min(curdata$time) > max.rt.diff) return(FALSE)
+  TRUE
+}
+
+#' Filter compound data to the largest same-module group
+#' For multi-module compounds, keeps only rows from the most-represented module.
+#' Single-row and single-module data returned unchanged.
+#' @param curdata Data frame of annotations for one compound
+#' @return Filtered data frame (same columns, potentially fewer rows)
+enforce_compound_coherence <- function(curdata) {
+  if (nrow(curdata) <= 1) return(curdata)
+  modules <- gsub(as.character(curdata$Module_RTclust), pattern = "_[0-9]*", replacement = "")
+  if (length(unique(modules)) <= 1) return(curdata)
+  # Keep rows from the module with the most annotations
+  module_counts <- table(modules)
+  best_module <- names(which.max(module_counts))
+  curdata[modules == best_module, , drop = FALSE]
+}
+
 #' Assign confidence based on standard criteria
 assign_conf <- function(curdata, filter.by, delta_rt, max_diff_rt, current_conf) {
   if (curdata$score[1] <= 0) {
@@ -501,8 +531,6 @@ get_confidence_stage4 <- function(curdata,
 
   if (num_good_adducts > 0) {
     final_res$score <- final_res$score * num_good_adducts
-  } else {
-    final_res$score <- 0
   }
 
   # Check minimum ions requirement
@@ -541,6 +569,7 @@ compute_confidence_for_compound <- function(curdata,
                                              multimer_abundance_check) {
 
   curdata <- curdata[order(curdata$Adduct), ]
+  curdata <- enforce_compound_coherence(curdata)  # Filter to best module before Stage 4
 
   # Check if any adducts match filter
   has_filter_adduct <- TRUE
@@ -578,12 +607,9 @@ compute_confidence_for_compound <- function(curdata,
       }
     }
   } else {
-    # No filter match - check if can still assign confidence
+    # No filter match - assign Low if has weighted adduct + high score
     if (any(curdata$Adduct %in% adduct_weights[, 1]) && curdata$score[1] >= SCORE_THRESHOLD_HIGH) {
-      if (any(curdata$Adduct %in% filter.by)) {
-        curdata <- curdata[curdata$Adduct %in% filter.by, , drop = FALSE]
-        Confidence <- CONFIDENCE_MEDIUM
-      }
+      Confidence <- CONFIDENCE_LOW
     }
   }
 
@@ -830,4 +856,95 @@ multilevelannotationstep4 <- function(outloc,
   print(table(conf_by_formula))
 
   as.data.frame(chemscoremat_with_confidence)
+}
+
+# =============================================================================
+# POST-HOC CONFIDENCE UPGRADE
+# =============================================================================
+
+#' Upgrade confidence for compounds with strong non-filter adduct evidence
+#'
+#' Evaluates compounds below Confidence 3 using isotope rows, multiple adducts,
+#' score, and RT coherence. Can only upgrade, never downgrade. When filter_by
+#' is set, non-filter compounds are assigned one tier lower than equivalent
+#' filter-matched compounds.
+#'
+#' @param annotation Data frame with Confidence, Adduct, score, time, compound_id columns
+#' @param filter.by Expected adducts (NULL, NA, or character vector)
+#' @param adduct_weights Adduct weights table (data frame or matrix with adduct column)
+#' @param max.rt.diff Maximum RT difference for coherence check (seconds)
+#'
+#' @return Data frame with upgraded confidence levels
+#' @export
+upgrade_confidence_with_evidence <- function(annotation,
+                                              filter.by = NULL,
+                                              adduct_weights = NULL,
+                                              max.rt.diff = 10) {
+
+  if (nrow(annotation) == 0) return(annotation)
+
+  filter_is_active <- !is_filter_empty(filter.by)
+
+  # Process adduct weights to matrix form if needed
+  adduct_weights <- create_adduct_weights(adduct_weights)
+
+  # Get unique compound_ids that could benefit from upgrade (below Conf 3)
+  candidates <- unique(annotation$compound_id[annotation$Confidence < CONFIDENCE_HIGH])
+
+  if (length(candidates) == 0) return(annotation)
+
+  for (cid in candidates) {
+    idx <- which(annotation$compound_id == cid)
+    curdata <- annotation[idx, , drop = FALSE]
+    curdata <- enforce_compound_coherence(curdata)  # Filter to best module
+
+    current_conf <- curdata$Confidence[1]
+
+    # --- Gather evidence ---
+    adducts_raw <- curdata$Adduct
+    base_adducts <- strip_isotope_suffix(adducts_raw)
+    n_base_adducts <- length(unique(base_adducts))
+
+    # Count isotope rows: rows with _[+N] suffix in Adduct
+    isotope_pattern <- "(_\\[(\\+|\\-)[0-9]+\\])"
+    has_isotope_suffix <- grepl(isotope_pattern, adducts_raw)
+    n_isotope_rows <- sum(has_isotope_suffix)
+
+    # Check for isotope boost (100x from get_chemscore)
+    has_isotope_boost <- max(curdata$score) >= 100
+
+    # Module + RT coherence
+    coherent <- check_compound_coherence(curdata, max.rt.diff)
+
+    # --- Determine evidence-based confidence ---
+    evidence_conf <- CONFIDENCE_NONE
+
+    if (coherent) {
+      if (n_isotope_rows > 0 && n_base_adducts >= 2) {
+        # Strongest: isotope rows + multiple base adducts
+        evidence_conf <- if (filter_is_active) CONFIDENCE_MEDIUM else CONFIDENCE_HIGH
+      } else if (n_isotope_rows > 0 && n_base_adducts >= 1) {
+        # Isotope rows + single base adduct
+        evidence_conf <- if (filter_is_active) CONFIDENCE_LOW else CONFIDENCE_MEDIUM
+      } else if (n_base_adducts >= 2 && has_isotope_boost) {
+        # Multiple adducts + isotope score boost
+        evidence_conf <- if (filter_is_active) CONFIDENCE_LOW else CONFIDENCE_MEDIUM
+      } else if (n_base_adducts >= 2) {
+        # Multiple adducts, no isotope evidence
+        evidence_conf <- CONFIDENCE_LOW
+      } else if (has_isotope_boost && n_base_adducts >= 1) {
+        # Single adduct with isotope boost
+        evidence_conf <- CONFIDENCE_LOW
+      }
+    }
+
+    # Only upgrade, never downgrade
+    new_conf <- max(current_conf, evidence_conf)
+
+    if (new_conf != current_conf) {
+      annotation$Confidence[idx] <- new_conf
+    }
+  }
+
+  annotation
 }

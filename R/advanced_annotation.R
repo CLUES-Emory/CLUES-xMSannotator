@@ -465,10 +465,36 @@ advanced_annotation <- function(peak_table,
   }
   # ----------------------------
 
-  # Output Stage4: Confidence level results
+  # Tool 10c: Upgrade confidence for compounds with strong non-filter evidence
   # ----------------------------
-  stage4_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
-  write.table(stage4_output, file = file.path(outloc, "Stage4_confidence_levels.txt"),
+  annotation <- upgrade_confidence_with_evidence(
+    annotation,
+    filter.by = filter_by,
+    adduct_weights = adduct_weights,
+    max.rt.diff = time_tolerance
+  )
+  # ----------------------------
+
+  # Output Stage4a: Full confidence level results (all rows, including incoherent)
+  # ----------------------------
+  stage4a_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
+  write.table(stage4a_output, file = file.path(outloc, "Stage4a_confidence_levels.txt"),
+              sep = "\t", row.names = FALSE)
+  # ----------------------------
+
+  # Filter to coherent rows only (keep largest module group per compound)
+  # ----------------------------
+  annotation <- do.call(rbind, lapply(
+    split(annotation, annotation$compound_id),
+    enforce_compound_coherence
+  ))
+  rownames(annotation) <- NULL
+  # ----------------------------
+
+  # Output Stage4b: Coherent rows only (feeds Stage5)
+  # ----------------------------
+  stage4b_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
+  write.table(stage4b_output, file = file.path(outloc, "Stage4b_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
 

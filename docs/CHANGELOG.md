@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 
 ### Changed
+- Refined coherence enforcement: now filters to the largest module group per compound instead of blanket downgrading to Conf 0. Added `enforce_compound_coherence()` helper that keeps only rows from the most-represented module for multi-module compounds. Applied as a pre-filter in `compute_confidence_for_compound()` (before Stage 4 evaluation) and `upgrade_confidence_with_evidence()` (before evidence gathering), replacing the post-hoc gate. Stage 4 now only sees coherent rows, allowing its internal RT clustering and module rules to work correctly on the filtered subset. Compounds like PEST0681 (2 rows in module 110 + 1 stray row in module 62) now retain their strong evidence instead of being killed. (2026-03-09)
+- Split Stage 4 output into Stage4a (all rows with confidence) and Stage4b (coherent rows only). Stage 5 redundancy filtering now receives Stage4b (coherent subset). Previously wrote single `Stage4_confidence_levels.txt`. (2026-03-09)
+
+### Fixed
+- Enforced module + RT coherence on all confidence levels > 0. Added `check_compound_coherence()` helper that verifies all rows for a compound are in the same peak module and within `max.rt.diff`. Applied at two enforcement points: (1) post-hoc gate in `compute_confidence_for_compound()` catches all Stage 4 paths at their single exit point, (2) replaced RT-only check in `upgrade_confidence_with_evidence()` with full module + RT coherence check. Previously, 6 Stage 4 code paths could assign Conf 1 or 2 without checking module coherence, resulting in ~92% of multi-row Conf 2 compounds being split across multiple peak modules. (2026-03-09)
+- Fixed dead code in `compute_confidence_for_compound()` (multilevelannotationstep4.R). The `else` block at line 580 re-checked `filter.by` inside a branch that already established no filter match — the inner condition was always FALSE. Replaced with `Confidence <- CONFIDENCE_LOW` so non-filter compounds with weighted adducts and high scores now receive Confidence 1 instead of being stuck at 0. (2026-03-09)
+- Fixed score zeroing in `get_confidence_stage4()` (multilevelannotationstep4.R). Removed `else { final_res$score <- 0 }` which zeroed the internal score for non-filter compounds, preventing the Confidence 1→2 boost check at line 572 from working correctly. Output scores (from Stage 3 merge) were not affected. (2026-03-09)
+
+### Added
+- Added `upgrade_confidence_with_evidence()` post-hoc confidence upgrade function (multilevelannotationstep4.R). Evaluates compounds below Confidence 3 using evidence already available: isotope rows, multiple base adducts, isotope score boost (≥100), and RT coherence. Can only upgrade, never downgrade. When `filter_by` is set, non-filter compounds are assigned one tier lower than equivalent filter-matched compounds (e.g., isotope rows + 2 adducts → Conf 2 instead of 3). When `filter_by` is NULL/NA, same tier as filter-matched. Integrated into `advanced_annotation()` as Tool 10c, running after `identify_isotopologues()` and before Stage 4 output write. (2026-03-09)
+
+### Changed
 - Replaced `rcdk` (Java/rJava dependency) with `enviPat` for isotope pattern calculations. `compute_isotopic_pattern()` and `precompute_isotope_patterns()` now use `enviPat::isopattern()` instead of `rcdk::get.formula()`/`rcdk::get.isotopes.pattern()`. This eliminates the rJava dependency entirely — no JDK, `JAVA_HOME`, or `R CMD javareconf` required. `enviPat` moved from Suggests to Imports; `rcdk` removed from Imports. Isotope pattern output format (mass, abund, mass_number_difference, exact_mass_diff) is preserved. Test data regenerated to match enviPat output values. (2026-03-04)
 
 ### Removed
