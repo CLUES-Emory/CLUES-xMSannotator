@@ -595,16 +595,6 @@ compute_confidence_for_compound <- function(curdata,
     if (!is.na(curdata$score_level[1])) {
       Confidence <- as.numeric(curdata$score_level)
 
-      # Boost to Medium if score > 10 and matches weighted adduct
-      if (Confidence[1] < CONFIDENCE_MEDIUM) {
-        weighted_adducts <- adduct_weights[as.numeric(adduct_weights[, 2]) > 0, 1]
-        if (any(curdata$Adduct %in% weighted_adducts) && curdata$score[1] > SCORE_THRESHOLD_HIGH) {
-          max_weight <- max(as.numeric(adduct_weights[adduct_weights[, 1] %in% curdata$Adduct, 2]))
-          high_weight_adducts <- adduct_weights[as.numeric(adduct_weights[, 2]) >= max_weight, 1]
-          curdata <- curdata[curdata$Adduct %in% high_weight_adducts, , drop = FALSE]
-          Confidence <- CONFIDENCE_MEDIUM
-        }
-      }
     }
   } else {
     # No filter match - assign Low if has weighted adduct + high score
@@ -910,9 +900,6 @@ upgrade_confidence_with_evidence <- function(annotation,
     has_isotope_suffix <- grepl(isotope_pattern, adducts_raw)
     n_isotope_rows <- sum(has_isotope_suffix)
 
-    # Check for isotope boost (100x from get_chemscore)
-    has_isotope_boost <- max(curdata$score) >= 100
-
     # Module + RT coherence
     coherent <- check_compound_coherence(curdata, max.rt.diff)
 
@@ -926,14 +913,8 @@ upgrade_confidence_with_evidence <- function(annotation,
       } else if (n_isotope_rows > 0 && n_base_adducts >= 1) {
         # Isotope rows + single base adduct
         evidence_conf <- if (filter_is_active) CONFIDENCE_LOW else CONFIDENCE_MEDIUM
-      } else if (n_base_adducts >= 2 && has_isotope_boost) {
-        # Multiple adducts + isotope score boost
-        evidence_conf <- if (filter_is_active) CONFIDENCE_LOW else CONFIDENCE_MEDIUM
       } else if (n_base_adducts >= 2) {
         # Multiple adducts, no isotope evidence
-        evidence_conf <- CONFIDENCE_LOW
-      } else if (has_isotope_boost && n_base_adducts >= 1) {
-        # Single adduct with isotope boost
         evidence_conf <- CONFIDENCE_LOW
       }
     }

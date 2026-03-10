@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+### Fixed
+- Removed false Confidence 2 assignments for compounds without corroborating evidence. Two changes: (1) Removed boost block in `compute_confidence_for_compound()` that unconditionally upgraded any weighted adduct with score > 10 from Conf 0/1 → Conf 2, bypassing filter checks. This was redundant for filter compounds (Stage 4 already assigns Conf 2 for filter matches) and too aggressive for non-filter compounds (filter_by=NULL path assigns Conf 0 because `has_filter_match()` returns FALSE). (2) Removed `has_isotope_boost` score proxy (`score >= 100`) from `upgrade_confidence_with_evidence()` evidence tiers. Scores can reach ≥ 100 from pathway matching or base scoring without any isotopes, creating false-positive upgrades. Evidence tiers now use only actual isotope row detection and multiple adduct counts. Single mass matches with no isotopes and no multiple adducts now correctly remain at Conf 0. (2026-03-10)
+
 ### Changed
 - Refined coherence enforcement: now filters to the largest module group per compound instead of blanket downgrading to Conf 0. Added `enforce_compound_coherence()` helper that keeps only rows from the most-represented module for multi-module compounds. Applied as a pre-filter in `compute_confidence_for_compound()` (before Stage 4 evaluation) and `upgrade_confidence_with_evidence()` (before evidence gathering), replacing the post-hoc gate. Stage 4 now only sees coherent rows, allowing its internal RT clustering and module rules to work correctly on the filtered subset. Compounds like PEST0681 (2 rows in module 110 + 1 stray row in module 62) now retain their strong evidence instead of being killed. (2026-03-09)
 - Split Stage 4 output into Stage4a (all rows with confidence) and Stage4b (coherent rows only). Stage 5 redundancy filtering now receives Stage4b (coherent subset). Previously wrote single `Stage4_confidence_levels.txt`. (2026-03-09)

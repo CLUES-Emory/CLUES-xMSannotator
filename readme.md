@@ -36,11 +36,10 @@ When `filter_by` is set (the default), compounds matched via filter adducts (M+H
 
 ### Evidence-Based Upgrades for Non-Filter Adducts
 
-Compounds initially assigned Confidence 0 (no filter adduct match) are re-evaluated using four evidence types:
+Compounds initially assigned Confidence 0 (no filter adduct match) are re-evaluated using three evidence types:
 
 - **Isotope rows**: Detected isotopic peaks (M+1, M+2) for the compound's adduct
 - **Multiple base adducts**: Two or more distinct adduct types detected (ignoring isotope suffixes)
-- **Isotope score boost**: Chemical score >= 100 (from the 100x isotope evidence multiplier)
 - **RT coherence**: All adduct/isotope peaks within `time_tolerance` of each other
 
 RT coherence is **required** for any upgrade above Confidence 0.
@@ -53,9 +52,7 @@ RT coherence is **required** for any upgrade above Confidence 0.
 |----------|-----------|
 | Isotope rows + 2+ base adducts + RT coherent | 3 (High) |
 | Isotope rows + 1 base adduct + RT coherent | 2 (Medium) |
-| 2+ base adducts + isotope boost + RT coherent | 2 (Medium) |
 | 2+ base adducts + RT coherent | 1 (Low) |
-| Isotope boost + 1 adduct + RT coherent | 1 (Low) |
 
 **Upgrade rules when `filter_by` is set (one tier lower):**
 
@@ -63,9 +60,7 @@ RT coherence is **required** for any upgrade above Confidence 0.
 |----------|-----------|
 | Isotope rows + 2+ base adducts + RT coherent | 2 (Medium) |
 | Isotope rows + 1 base adduct + RT coherent | 1 (Low) |
-| 2+ base adducts + isotope boost + RT coherent | 1 (Low) |
 | 2+ base adducts + RT coherent | 1 (Low) |
-| Isotope boost + 1 adduct + RT coherent | 1 (Low) |
 
 ## Summary of CLUES-Emory Changes
 

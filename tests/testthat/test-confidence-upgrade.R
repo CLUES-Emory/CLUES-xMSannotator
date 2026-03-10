@@ -106,7 +106,7 @@ test_that("2 base adducts + RT coherent, no isotopes -> Conf 1 (both filter mode
   expect_equal(unique(result_set$Confidence), 1)
 })
 
-test_that("2 base adducts + isotope boost + RT coherent -> Conf 2 (NULL) / Conf 1 (set)", {
+test_that("2 base adducts + high score + RT coherent -> Conf 1 (both filter modes)", {
   ann <- make_annotation(
     "HMDB004",
     adducts = c("M+Na", "M+NH4"),
@@ -117,7 +117,7 @@ test_that("2 base adducts + isotope boost + RT coherent -> Conf 2 (NULL) / Conf 
   result_null <- upgrade_confidence_with_evidence(
     ann, filter.by = NULL, adduct_weights = test_adduct_weights, max.rt.diff = 10
   )
-  expect_equal(unique(result_null$Confidence), 2)
+  expect_equal(unique(result_null$Confidence), 1)
 
   result_set <- upgrade_confidence_with_evidence(
     ann, filter.by = c("M+H", "M-H"), adduct_weights = test_adduct_weights, max.rt.diff = 10
@@ -206,7 +206,7 @@ test_that("Empty annotation handled gracefully", {
   expect_equal(nrow(result), 0)
 })
 
-test_that("Isotope boost + 1 adduct + RT coherent -> Conf 1", {
+test_that("Single adduct + high score + no isotopes -> stays Conf 0", {
   ann <- make_annotation(
     "HMDB009",
     adducts = c("M+Na"),
@@ -217,12 +217,12 @@ test_that("Isotope boost + 1 adduct + RT coherent -> Conf 1", {
   result_null <- upgrade_confidence_with_evidence(
     ann, filter.by = NULL, adduct_weights = test_adduct_weights, max.rt.diff = 10
   )
-  expect_equal(unique(result_null$Confidence), 1)
+  expect_equal(unique(result_null$Confidence), 0)
 
   result_set <- upgrade_confidence_with_evidence(
     ann, filter.by = c("M+H", "M-H"), adduct_weights = test_adduct_weights, max.rt.diff = 10
   )
-  expect_equal(unique(result_set$Confidence), 1)
+  expect_equal(unique(result_set$Confidence), 0)
 })
 
 test_that("Multiple compounds upgraded independently", {
