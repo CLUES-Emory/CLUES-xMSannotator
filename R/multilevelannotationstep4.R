@@ -899,6 +899,7 @@ upgrade_confidence_with_evidence <- function(annotation,
     isotope_pattern <- "(_\\[(\\+|\\-)[0-9]+\\])"
     has_isotope_suffix <- grepl(isotope_pattern, adducts_raw)
     n_isotope_rows <- sum(has_isotope_suffix)
+    n_base_rows <- sum(!has_isotope_suffix)
 
     # Module + RT coherence
     coherent <- check_compound_coherence(curdata, max.rt.diff)
@@ -907,11 +908,11 @@ upgrade_confidence_with_evidence <- function(annotation,
     evidence_conf <- CONFIDENCE_NONE
 
     if (coherent) {
-      if (n_isotope_rows > 0 && n_base_adducts >= 2) {
-        # Strongest: isotope rows + multiple base adducts
+      if (n_isotope_rows > 0 && n_base_rows >= 1 && n_base_adducts >= 2) {
+        # Strongest: isotope rows + actual base rows + multiple base adducts
         evidence_conf <- if (filter_is_active) CONFIDENCE_MEDIUM else CONFIDENCE_HIGH
-      } else if (n_isotope_rows > 0 && n_base_adducts >= 1) {
-        # Isotope rows + single base adduct
+      } else if (n_isotope_rows > 0 && n_base_rows >= 1) {
+        # Isotope rows + actual base row (single base adduct)
         evidence_conf <- if (filter_is_active) CONFIDENCE_LOW else CONFIDENCE_MEDIUM
       } else if (n_base_adducts >= 2) {
         # Multiple adducts, no isotope evidence
@@ -961,7 +962,7 @@ cap_confidence_with_evidence <- function(annotation,
   if (nrow(annotation) == 0) return(annotation)
 
   candidates <- unique(annotation$compound_id[
-    annotation$Confidence > CONFIDENCE_NONE & annotation$Confidence < CONFIDENCE_BOOSTED
+    annotation$Confidence < CONFIDENCE_BOOSTED
   ])
   if (length(candidates) == 0) return(annotation)
 
@@ -975,24 +976,30 @@ cap_confidence_with_evidence <- function(annotation,
     n_base_adducts <- length(unique(base_adducts))
 
     isotope_pattern <- "(_\\[(\\+|\\-)[0-9]+\\])"
-    n_isotope_rows <- sum(grepl(isotope_pattern, adducts_raw))
+    has_isotope <- grepl(isotope_pattern, adducts_raw)
+    n_isotope_rows <- sum(has_isotope)
+    n_base_rows <- sum(!has_isotope)
 
     coherent <- check_compound_coherence(curdata, max.rt.diff)
 
     # Determine maximum justified confidence
-    if (coherent && n_isotope_rows > 0 && n_base_adducts >= 1) {
-      max_conf <- CONFIDENCE_HIGH       # 3: isotopes + adduct
+    if (coherent && n_isotope_rows > 0 && n_base_rows >= 1 && n_base_adducts >= 1) {
+      max_conf <- CONFIDENCE_HIGH       # 3: isotopes + actual base row
     } else if (coherent && n_base_adducts >= 2) {
       max_conf <- CONFIDENCE_MEDIUM     # 2: multiple adducts
-    } else if (n_base_adducts == 1 && any(base_adducts %in% level1_primary_adducts)) {
-      max_conf <- CONFIDENCE_LOW        # 1: single primary adduct
+    } else if (n_base_rows >= 1 && any(base_adducts[!has_isotope] %in% level1_primary_adducts)) {
+      max_conf <- CONFIDENCE_LOW        # 1: single primary adduct (from actual base row)
     } else {
       max_conf <- CONFIDENCE_NONE       # 0: insufficient evidence
     }
 
     current_conf <- annotation$Confidence[idx[1]]
     if (current_conf > max_conf) {
+      # Cap down
       annotation$Confidence[idx] <- max_conf
+    } else if (current_conf == CONFIDENCE_NONE && max_conf > CONFIDENCE_NONE) {
+      # Rescue: raise Level 0 to evidence-based level (capped at Level 1)
+      annotation$Confidence[idx] <- min(max_conf, CONFIDENCE_LOW)
     }
   }
 

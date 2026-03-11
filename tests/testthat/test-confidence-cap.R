@@ -111,7 +111,7 @@ test_that("Conf 4 (confirmed) is untouched", {
   expect_equal(unique(result$Confidence), 4)
 })
 
-test_that("Conf 0 is untouched", {
+test_that("Conf 0 with non-primary adduct stays 0", {
   ann <- make_annotation(
     "HMDB008",
     adducts = c("M+Na"),
@@ -124,7 +124,47 @@ test_that("Conf 0 is untouched", {
   expect_equal(unique(result$Confidence), 0)
 })
 
-test_that("Incoherent multi-row at Conf 2 -> capped to 0", {
+test_that("Conf 0 single M+H raised to 1", {
+  ann <- make_annotation(
+    "HMDB020",
+    adducts = c("M+H"),
+    scores = c(10),
+    times = c(100),
+    confidence = 0
+  )
+
+  result <- cap_confidence_with_evidence(ann, max.rt.diff = 10)
+  expect_equal(unique(result$Confidence), 1)
+})
+
+test_that("Conf 0 single M-H raised to 1", {
+  ann <- make_annotation(
+    "HMDB021",
+    adducts = c("M-H"),
+    scores = c(10),
+    times = c(100),
+    confidence = 0
+  )
+
+  result <- cap_confidence_with_evidence(ann, max.rt.diff = 10)
+  expect_equal(unique(result$Confidence), 1)
+})
+
+test_that("Orphan isotope row at Conf 2 capped to 0", {
+  # Single isotope-suffixed adduct with NO base adduct row
+  ann <- make_annotation(
+    "PEST1802",
+    adducts = c("M+ACN+H_[+1]"),
+    scores = c(5000),
+    times = c(100),
+    confidence = 2
+  )
+
+  result <- cap_confidence_with_evidence(ann, max.rt.diff = 10)
+  expect_equal(unique(result$Confidence), 0)
+})
+
+test_that("Incoherent multi-row with M+H at Conf 2 -> capped to 1", {
   ann <- make_annotation(
     "HMDB009",
     adducts = c("M+H", "M+Na"),
@@ -133,8 +173,9 @@ test_that("Incoherent multi-row at Conf 2 -> capped to 0", {
     confidence = 2
   )
 
+  # Incoherent blocks Level 2+ (needs coherence), but M+H base row qualifies for Level 1
   result <- cap_confidence_with_evidence(ann, max.rt.diff = 10)
-  expect_equal(unique(result$Confidence), 0)
+  expect_equal(unique(result$Confidence), 1)
 })
 
 test_that("Custom primary adducts: M+Na primary -> M+Na gets 1, M+H gets 0", {

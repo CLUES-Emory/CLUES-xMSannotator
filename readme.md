@@ -15,67 +15,28 @@ The annotation pipeline runs through five stages via `advanced_annotation()`:
 1. **Stage 1 - Mass Matching**: Matches observed m/z values to compound databases across all specified adducts. Assigns peaks to correlation-based modules and RT clusters.
 2. **Stage 2 - Isotope Detection**: Identifies isotopic peaks (M+1, M+2, etc.) based on mass differences, intensity ratios, and RT agreement.
 3. **Stage 3 - Chemical Scoring**: Scores each compound annotation using adduct correlation evidence, module membership, and isotope support. Optionally integrates pathway enrichment (HMDB or custom).
-4. **Stage 4 - Confidence Assignment**: Assigns confidence levels (0-3) based on adduct evidence, RT coherence, and filter adduct matching. For compounds spanning multiple peak modules, filters to the largest module group before evaluation. Identifies isotopologues (e.g., 13C, 15N substitutions). Upgrades non-filter compounds with strong evidence. Optionally boosts confirmed compounds to level 4. Outputs Stage4a (all rows) and Stage4b (coherent rows only); Stage 5 uses Stage4b.
+4. **Stage 4 - Confidence Assignment**: Assigns confidence levels (0-4) based on adduct evidence, isotope detection, RT coherence, and module coherence. Enforces hard evidence requirements via a post-hoc cap (see [Confidence Levels](#confidence-levels)). Identifies isotopologues (e.g., 13C, 15N substitutions). Adds `Confidence_Level` text labels to output. Outputs Stage4a (all rows) and Stage4b (coherent rows only); Stage 5 uses Stage4b.
 5. **Stage 5 - Redundancy Filtering**: Curates annotations by removing redundant entries, keeping the highest-confidence annotation per feature.
 
 All intermediate results are saved as tab-delimited text files (`Stage1_*.txt` through `Stage5_*.txt`) for inspection.
 
 ## Confidence Levels
 
-Each compound annotation is assigned a confidence level reflecting the strength of supporting evidence. After Stage 4 and the evidence upgrade step, a **post-hoc evidence cap** enforces hard evidence requirements — confidence can only stay the same or decrease based on what evidence is actually present. A `Confidence_Level` text label column is added to all output files.
+Each annotation receives a numeric `Confidence` level (0-4) and a human-readable `Confidence_Level` label in all output files. The final confidence is determined by hard evidence requirements enforced after all internal scoring steps.
 
-| Level | Label | Meaning |
-|-------|-------|---------|
+| Level | Label | Evidence Required |
+|-------|-------|-------------------|
 | 4 | Confirmed | User-confirmed compound (via `boosted_compounds` parameter) |
-| 3 | High | Isotope evidence + adduct match + RT/module coherent |
-| 2 | Medium | Multiple distinct adducts + RT/module coherent |
-| 1 | Low | Single primary adduct match (configurable via `level1_primary_adducts`, default: M+H, M-H) |
-| 0 | None | Insufficient evidence |
+| 3 | High | Isotope rows (M+1, M+2, etc.) + 1 or more base adducts + module/RT coherent |
+| 2 | Medium | 2+ distinct base adducts + module/RT coherent (no isotopes required) |
+| 1 | Low | Single primary adduct match (default: M+H or M-H) |
+| 0 | None | Single non-primary adduct, incoherent multi-row evidence, or no match |
 
-### Evidence Cap
+**Module coherence**: When a compound has annotations in multiple peak modules, only the rows from the most-represented module are used for evidence evaluation. This prevents stray matches in unrelated modules from inflating confidence.
 
-After Stage 4 confidence assignment and the upgrade step, `cap_confidence_with_evidence()` enforces maximum justified confidence based on actual evidence. Confidence 0 and Confidence 4 (user-confirmed) are skipped.
+**RT coherence**: All adduct and isotope rows for a compound must fall within `time_tolerance` of each other to qualify for Confidence 2 or 3.
 
-**Module coherence**: When a compound has annotations in multiple peak modules, only the rows from the most-represented module are used for evidence evaluation.
-
-**Cap rules:**
-
-| Evidence | Maximum Confidence |
-|----------|-------------------|
-| Isotope rows + 1+ base adducts + module/RT coherent | 3 (High) |
-| 2+ base adducts, no isotopes + module/RT coherent | 2 (Medium) |
-| Single primary adduct (M+H or M-H by default) | 1 (Low) |
-| Single non-primary adduct, or incoherent multi-row | 0 (None) |
-
-The `level1_primary_adducts` parameter (default: `c("M+H", "M-H")`) controls which adducts qualify for Confidence 1 as a single match. This is independent of `filter_by`, allowing `filter_by = NULL` for equal Stage 4 scoring while still requiring primary ion evidence for Level 1.
-
-### Evidence-Based Upgrades for Non-Filter Adducts
-
-Compounds initially assigned Confidence 0 (no filter adduct match) are re-evaluated using three evidence types:
-
-- **Isotope rows**: Detected isotopic peaks (M+1, M+2) for the compound's adduct
-- **Multiple base adducts**: Two or more distinct adduct types detected (ignoring isotope suffixes)
-- **RT coherence**: All adduct/isotope peaks within `time_tolerance` of each other
-
-RT coherence is **required** for any upgrade above Confidence 0.
-
-**Upgrade rules when `filter_by` is NULL/NA (same tier as filter-matched):**
-
-| Evidence | Confidence |
-|----------|-----------|
-| Isotope rows + 2+ base adducts + RT coherent | 3 (High) |
-| Isotope rows + 1 base adduct + RT coherent | 2 (Medium) |
-| 2+ base adducts + RT coherent | 1 (Low) |
-
-**Upgrade rules when `filter_by` is set (one tier lower):**
-
-| Evidence | Confidence |
-|----------|-----------|
-| Isotope rows + 2+ base adducts + RT coherent | 2 (Medium) |
-| Isotope rows + 1 base adduct + RT coherent | 1 (Low) |
-| 2+ base adducts + RT coherent | 1 (Low) |
-
-Note: After upgrades, the evidence cap may further reduce confidence if the compound's evidence doesn't meet the cap tier requirements.
+**Primary adducts**: The `level1_primary_adducts` parameter (default: `c("M+H", "M-H")`) controls which adducts qualify for Confidence 1 as a single match. This is independent of `filter_by`, allowing `filter_by = NULL` for equal scoring while still requiring primary ion evidence for Level 1.
 
 ## Summary of CLUES-Emory Changes
 
@@ -88,14 +49,17 @@ Bug fixes, new features, and code cleanup were completed using [Claude Code](htt
 - **Confirmed compounds**: `boosted_compounds` parameter boosts confidence of confirmed annotations to level 4 (Confirmed), with flexible mz/rt proximity matching
 - **Isotope mass tolerance**: separate `isotope_mass_tolerance` parameter for ppm-based filtering of isotope matches
 - **Isotopologue identification**: post-confidence step uses `enviPat` to identify which specific isotope substitution each isotope peak corresponds to (e.g., 13C:1 vs 15N:1 for M+1 peaks), adding `isotopologue` and `isotopologue_quality` columns to output
-- **Evidence-based confidence upgrades**: non-filter adducts (M+Na, M+NH4, etc.) are no longer permanently capped at Confidence 0. Compounds with isotope evidence, multiple adducts, and RT coherence are upgraded (see [Confidence Levels](#confidence-levels))
-- **Module coherence filtering**: compounds spanning multiple peak modules are filtered to the largest module group before confidence evaluation, preventing stray matches from killing strong evidence. Stage 4 outputs split into Stage4a (all rows) and Stage4b (coherent only); Stage 5 uses Stage4b
+- **Evidence-based confidence**: hard evidence requirements enforced via post-hoc cap — Confidence 3 requires isotope evidence, Confidence 2 requires multiple adducts, Confidence 1 requires a primary ion match (see [Confidence Levels](#confidence-levels))
+- **Confidence labels**: `Confidence_Level` text column (None/Low/Medium/High/Confirmed) added to all output files
+- **Primary adduct parameter**: `level1_primary_adducts` controls which single-adduct matches qualify for Confidence 1 (default: M+H, M-H), independent of `filter_by`
+- **Module coherence filtering**: compounds spanning multiple peak modules are filtered to the largest module group before confidence evaluation, preventing stray matches from inflating confidence. Stage 4 outputs split into Stage4a (all rows) and Stage4b (coherent only); Stage 5 uses Stage4b
 - **Stage outputs**: all intermediate results saved as tab-delimited text files (Stage1 through Stage5) for inspection
 - **Adduct/isotope summaries**: console output summarizing adduct detection and isotope detection after each step
 - **Abundance checks**: configurable `multimer_abundance_check` and `MplusH_abundance_ratio_check` parameters
 
 ### Bug Fixes
 - Replaced `rcdk` (Java/rJava dependency) with `enviPat` for isotope pattern calculations, eliminating the rJava dependency entirely (no JDK, `JAVA_HOME`, or `R CMD javareconf` required)
+- Removed false Confidence 2 assignments for compounds without corroborating evidence (unconditional score boost and score-proxy isotope detection)
 - Fixed confidence assignment bugs: dead code in non-filter adduct path (always-FALSE condition), score zeroing preventing confidence boosts, forward-iterating row deletion in `apply_multimer_rules()`, NULL adduct weights, unreachable guards, fragile column deletion by position, hardcoded column indices, `cbind()` type coercion, inconsistent early-return confidence types
 - Fixed chemical scoring: hardcoded RT tolerance now uses parameter, NA rows from empty results, duplicate rows from per-row instead of per-compound processing, isotope rows incorrectly removed by `na.omit()`
 - Fixed isotope handling: isotopes now preserved through chemical scoring with 100x score boost, Stage 2 output column headers and file creation

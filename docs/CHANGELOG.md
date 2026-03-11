@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+### Fixed
+- Fixed single M+H/M-H annotations stuck at Confidence 0 — `cap_confidence_with_evidence()` now processes Level 0 compounds and rescues primary adduct matches to Level 1. Previously, cap only processed compounds with Confidence > 0, so single-row primary adduct matches that Stage 4 assigned Level 0 (due to `score > 10` strict inequality and `filter_by = NULL`) were never evaluated. (2026-03-10)
+- Fixed orphan isotope rows (no base adduct row present) incorrectly upgraded to Level 2. Both `upgrade_confidence_with_evidence()` and `cap_confidence_with_evidence()` now count actual base rows (`n_base_rows`) separately from unique base adduct types (`n_base_adducts`). Isotope evidence tiers require `n_base_rows >= 1`, preventing lone isotope rows (e.g., `M+ACN+H_[+1]` with no `M+ACN+H` row) from being treated as isotope + base adduct evidence. (2026-03-10)
+
 ### Added
 - Added `cap_confidence_with_evidence()` post-hoc confidence cap function (multilevelannotationstep4.R). Runs after Stage 4 and the upgrade step to enforce hard evidence requirements on confidence values. Unlike upgrade (which only raises), the cap can lower confidence when evidence is insufficient. Cap tiers: Conf 3 requires isotope rows + adduct + module/RT coherence, Conf 2 requires 2+ base adducts + coherence, Conf 1 requires a single primary adduct match, everything else caps to 0. Skips Conf 0 and Conf 4 (user-confirmed). (2026-03-10)
 - Added `add_confidence_labels()` function (multilevelannotationstep4.R). Maps numeric Confidence column to human-readable `Confidence_Level` text labels (None/Low/Medium/High/Confirmed) in all output files. (2026-03-10)

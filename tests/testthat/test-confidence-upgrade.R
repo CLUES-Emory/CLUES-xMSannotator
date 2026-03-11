@@ -269,6 +269,22 @@ test_that("Module incoherence: pre-filter keeps best module, upgrades on coheren
   expect_equal(unique(result$Confidence), 2)
 })
 
+test_that("Orphan isotope row (no base row) stays Conf 0", {
+  # Single isotope-suffixed adduct with NO base adduct row present
+  ann <- make_annotation(
+    "PEST1802",
+    adducts = c("M+ACN+H_[+1]"),
+    scores = c(5000),
+    times = c(100)
+  )
+
+  result <- upgrade_confidence_with_evidence(
+    ann, filter.by = NULL, adduct_weights = test_adduct_weights, max.rt.diff = 10
+  )
+
+  expect_equal(unique(result$Confidence), 0)
+})
+
 test_that("Same module with different RT clusters is coherent", {
   ann <- make_annotation(
     "HMDB013",
