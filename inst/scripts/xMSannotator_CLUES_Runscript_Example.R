@@ -197,6 +197,7 @@ MplusH_abundance_ratio_check  <- TRUE
 multimer_abundance_check      <- FALSE
 redundancy_filtering          <- TRUE
 min_ions_per_chemical         <- 2
+level1_primary_adducts       <- c("M+H", "M-H")  # adducts that qualify for Conf 1 as a single match
 
 # Pathway settings
 pathway_mode                <- "skip"   # "skip", "HMDB", or "custom"
@@ -251,6 +252,7 @@ system.time(
     multimer_abundance_check      = multimer_abundance_check,
     redundancy_filtering          = redundancy_filtering,
     identify_isotopologues_flag   = identify_isotopologues_flag,
+    level1_primary_adducts        = level1_primary_adducts,
     pathway_mode                  = pathway_mode,
     pathway_data                  = pathway_data,
     excluded_pathways             = excluded_pathways,

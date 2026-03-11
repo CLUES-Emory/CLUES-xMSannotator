@@ -929,3 +929,89 @@ upgrade_confidence_with_evidence <- function(annotation,
 
   annotation
 }
+
+# =============================================================================
+# POST-HOC CONFIDENCE CAP
+# =============================================================================
+
+#' Cap confidence based on hard evidence requirements
+#'
+#' Runs after Stage 4 and upgrade step to enforce evidence-based caps on
+#' confidence values. Unlike upgrade (which only raises), this function can
+#' lower confidence when evidence is insufficient. Skips Conf 0 and Conf 4
+#' (user-confirmed). Reuses enforce_compound_coherence() and
+#' check_compound_coherence() for module/RT evaluation.
+#'
+#' Evidence cap tiers:
+#' - 3 (High): isotope rows + 1+ base adducts, module + RT coherent
+#' - 2 (Medium): 2+ base adducts (no isotopes needed), module + RT coherent
+#' - 1 (Low): single adduct matching a primary ion (level1_primary_adducts)
+#' - 0 (None): single non-primary adduct, or incoherent multi-row
+#'
+#' @param annotation Data frame with Confidence, Adduct, time, compound_id, Module_RTclust columns
+#' @param level1_primary_adducts Character vector of primary adducts that qualify for Conf 1
+#'   as a single match (default: c("M+H", "M-H"))
+#' @param max.rt.diff Maximum RT difference for coherence check (seconds)
+#'
+#' @return Data frame with capped confidence levels
+#' @export
+cap_confidence_with_evidence <- function(annotation,
+                                          level1_primary_adducts = c("M+H", "M-H"),
+                                          max.rt.diff = 10) {
+  if (nrow(annotation) == 0) return(annotation)
+
+  candidates <- unique(annotation$compound_id[
+    annotation$Confidence > CONFIDENCE_NONE & annotation$Confidence < CONFIDENCE_BOOSTED
+  ])
+  if (length(candidates) == 0) return(annotation)
+
+  for (cid in candidates) {
+    idx <- which(annotation$compound_id == cid)
+    curdata <- annotation[idx, , drop = FALSE]
+    curdata <- enforce_compound_coherence(curdata)
+
+    adducts_raw <- curdata$Adduct
+    base_adducts <- strip_isotope_suffix(adducts_raw)
+    n_base_adducts <- length(unique(base_adducts))
+
+    isotope_pattern <- "(_\\[(\\+|\\-)[0-9]+\\])"
+    n_isotope_rows <- sum(grepl(isotope_pattern, adducts_raw))
+
+    coherent <- check_compound_coherence(curdata, max.rt.diff)
+
+    # Determine maximum justified confidence
+    if (coherent && n_isotope_rows > 0 && n_base_adducts >= 1) {
+      max_conf <- CONFIDENCE_HIGH       # 3: isotopes + adduct
+    } else if (coherent && n_base_adducts >= 2) {
+      max_conf <- CONFIDENCE_MEDIUM     # 2: multiple adducts
+    } else if (n_base_adducts == 1 && any(base_adducts %in% level1_primary_adducts)) {
+      max_conf <- CONFIDENCE_LOW        # 1: single primary adduct
+    } else {
+      max_conf <- CONFIDENCE_NONE       # 0: insufficient evidence
+    }
+
+    current_conf <- annotation$Confidence[idx[1]]
+    if (current_conf > max_conf) {
+      annotation$Confidence[idx] <- max_conf
+    }
+  }
+
+  annotation
+}
+
+# =============================================================================
+# CONFIDENCE LABELS
+# =============================================================================
+
+#' Add human-readable confidence labels
+#'
+#' Maps numeric Confidence column to a Confidence_Level text label column.
+#'
+#' @param annotation Data frame with Confidence column (numeric 0-4)
+#' @return Data frame with added Confidence_Level column
+#' @export
+add_confidence_labels <- function(annotation) {
+  labels <- c("0" = "None", "1" = "Low", "2" = "Medium", "3" = "High", "4" = "Confirmed")
+  annotation$Confidence_Level <- labels[as.character(annotation$Confidence)]
+  annotation
+}

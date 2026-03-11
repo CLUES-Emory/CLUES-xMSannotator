@@ -133,6 +133,7 @@ advanced_annotation <- function(peak_table,
                                 boost_mass_tolerance = NULL,
                                 boost_time_tolerance = NULL,
                                 identify_isotopologues_flag = TRUE,
+                                level1_primary_adducts = c("M+H", "M-H"),
                                 outloc = tempdir(),
                                 n_workers = parallel::detectCores()) {
   if (is.null(adduct_table)) {
@@ -474,6 +475,18 @@ advanced_annotation <- function(peak_table,
     max.rt.diff = time_tolerance
   )
   # ----------------------------
+
+  # Tool 10d: Cap confidence based on evidence (isotopes, multiple adducts, primary ion)
+  # ----------------------------
+  annotation <- cap_confidence_with_evidence(
+    annotation,
+    level1_primary_adducts = level1_primary_adducts,
+    max.rt.diff = time_tolerance
+  )
+  # ----------------------------
+
+  # Add human-readable confidence labels
+  annotation <- add_confidence_labels(annotation)
 
   # Output Stage4a: Full confidence level results (all rows, including incoherent)
   # ----------------------------

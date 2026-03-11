@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+### Added
+- Added `cap_confidence_with_evidence()` post-hoc confidence cap function (multilevelannotationstep4.R). Runs after Stage 4 and the upgrade step to enforce hard evidence requirements on confidence values. Unlike upgrade (which only raises), the cap can lower confidence when evidence is insufficient. Cap tiers: Conf 3 requires isotope rows + adduct + module/RT coherence, Conf 2 requires 2+ base adducts + coherence, Conf 1 requires a single primary adduct match, everything else caps to 0. Skips Conf 0 and Conf 4 (user-confirmed). (2026-03-10)
+- Added `add_confidence_labels()` function (multilevelannotationstep4.R). Maps numeric Confidence column to human-readable `Confidence_Level` text labels (None/Low/Medium/High/Confirmed) in all output files. (2026-03-10)
+- Added `level1_primary_adducts` parameter to `advanced_annotation()` (default: `c("M+H", "M-H")`). Controls which adducts qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`, allowing `filter_by = NULL` for equal Stage 4 scoring while still requiring primary ion evidence for Level 1. (2026-03-10)
+
+### Changed
+- Renamed confidence level 4 label from "Boosted" to "Confirmed" in documentation. (2026-03-10)
+
 ### Fixed
 - Removed false Confidence 2 assignments for compounds without corroborating evidence. Two changes: (1) Removed boost block in `compute_confidence_for_compound()` that unconditionally upgraded any weighted adduct with score > 10 from Conf 0/1 → Conf 2, bypassing filter checks. This was redundant for filter compounds (Stage 4 already assigns Conf 2 for filter matches) and too aggressive for non-filter compounds (filter_by=NULL path assigns Conf 0 because `has_filter_match()` returns FALSE). (2) Removed `has_isotope_boost` score proxy (`score >= 100`) from `upgrade_confidence_with_evidence()` evidence tiers. Scores can reach ≥ 100 from pathway matching or base scoring without any isotopes, creating false-positive upgrades. Evidence tiers now use only actual isotope row detection and multiple adduct counts. Single mass matches with no isotopes and no multiple adducts now correctly remain at Conf 0. (2026-03-10)
 
