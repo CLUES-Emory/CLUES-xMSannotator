@@ -286,8 +286,21 @@ results <- read.table(results_file, sep = "\t", header = TRUE)
 # Join with compound metadata if a metafile is provided
 if (!is.null(db_metafile_path)) {
   db_metafile <- read_xlsx(db_metafile_path)
+  names(db_metafile)[names(db_metafile) == "Formula_ID"] <- "compound_id"
   results <- left_join(results, db_metafile, by = "compound_id")
 }
+
+# Merge feature table QA metadata
+metadata_cols <- c("feature_id", "n_detected", "n_filled", "peak_quality",
+                   "alignment_score", "combined_score", "quality_category",
+                   "peak_shape", "passed_filter", "Water_fc",
+                   "Overall_detect_pct", "Study_Sample_detect_pct")
+# Also include any _CV columns (names vary by study, e.g., HRE.p1Std._CV, Study_Sample_CV)
+cv_cols <- grep("_CV$", colnames(feature_table), value = TRUE, ignore.case = TRUE)
+metadata_cols <- unique(c(metadata_cols, cv_cols))
+feature_metadata <- feature_table[, intersect(metadata_cols, colnames(feature_table))]
+feature_metadata <- unique(feature_metadata)
+results <- left_join(results, feature_metadata, by = "feature_id")
 
 # Export to Excel
 output_name <- file.path(outloc, paste0(lc_mode, "-", study_id, "_Annotation.xlsx"))

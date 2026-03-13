@@ -192,6 +192,7 @@ cat(sprintf("Compound database: %d compounds\n", nrow(compound_table)))
 db_metafile_path <- file.path(db_base_dir, db_ls[[ii, "Meta_File"]])
 cat(sprintf("DB metadata:    %s\n", db_metafile_path))
 db_metafile <- read_xlsx(db_metafile_path)
+names(db_metafile)[names(db_metafile) == "Formula_ID"] <- "compound_id"
 
 
 # =============================================================================
@@ -350,8 +351,17 @@ results <- read.table(results_file, sep = "\t", header = TRUE)
 # Join with compound metadata
 results <- left_join(results, db_metafile, by = "compound_id")
 
-# Move feature_id to first column
-results <- results[, c("feature_id", setdiff(colnames(results), "feature_id"))]
+# Merge feature table QA metadata
+metadata_cols <- c("feature_id", "n_detected", "n_filled", "peak_quality",
+                   "alignment_score", "combined_score", "quality_category",
+                   "peak_shape", "passed_filter", "Water_fc",
+                   "Overall_detect_pct", "Study_Sample_detect_pct")
+# Also include any _CV columns (names vary by study, e.g., HRE.p1Std._CV, Study_Sample_CV)
+cv_cols <- grep("_CV$", colnames(feature_table), value = TRUE, ignore.case = TRUE)
+metadata_cols <- unique(c(metadata_cols, cv_cols))
+feature_metadata <- feature_table[, intersect(metadata_cols, colnames(feature_table))]
+feature_metadata <- unique(feature_metadata)
+results <- left_join(results, feature_metadata, by = "feature_id")
 
 # Export to Excel
 write_xlsx(results, output_name)
