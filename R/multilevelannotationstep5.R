@@ -1,6 +1,10 @@
+is_scalar_na <- function(x) {
+  is.atomic(x) && length(x) == 1 && is.na(x)
+}
+
 init_chemscoremat <- function(chemscoremat, outloc = tempdir()) {
-  if (any(is.na(chemscoremat))) {
-    chemscoremat <- read.table(file.path(outloc, "Stage4_confidence_levels.txt"), sep = "\t", header = TRUE)
+  if (is_scalar_na(chemscoremat)) {
+    chemscoremat <- read.table(file.path(outloc, "Stage4b_confidence_levels.txt"), sep = "\t", header = TRUE)
   }
   chemscoremat <- as.data.frame(chemscoremat)
   chemscoremat$mz <- as.numeric(chemscoremat$mz)
@@ -77,6 +81,5 @@ multilevelannotationstep5 <- function(outloc,
   curated_res$MatchCategory <- rep("Multiple", nrow(curated_res))
   curated_res$MatchCategory[which(curated_res$mz %in% unique_features)] <- "Unique"
 
-  write.table(curated_res, file = file.path(outloc, "Stage5_curated_results.txt"), sep = "\t", row.names = FALSE)
   return(curated_res)
 }

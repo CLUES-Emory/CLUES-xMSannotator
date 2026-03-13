@@ -3,6 +3,7 @@
 All notable changes to this project will be documented in this file.
 
 ### Fixed
+- Fixed Stage 5 redundancy filtering reading stale pre-upgrade data. `init_chemscoremat()` in `multilevelannotationstep5.R` used `any(is.na())` to detect whether a data frame was passed, but annotation data frames contain legitimate NA values in `isotopologue`/`isotopologue_quality` columns, causing it to always fall back to reading the old `Stage4_confidence_levels.txt` file. This discarded all confidence upgrades, caps, labels, and coherence filtering — reverting 136 Conf 2 rows to Conf 0/1 and reintroducing 83 incoherent rows. Fix: changed sentinel check to `is_scalar_na()` (detects the default `NA` parameter vs. a real data frame), updated fallback to read `Stage4b_confidence_levels.txt` (post-coherence), and removed duplicate Stage5 file write from inside `multilevelannotationstep5()`. (2026-03-10)
 - Fixed single M+H/M-H annotations stuck at Confidence 0 — `cap_confidence_with_evidence()` now processes Level 0 compounds and rescues primary adduct matches to Level 1. Previously, cap only processed compounds with Confidence > 0, so single-row primary adduct matches that Stage 4 assigned Level 0 (due to `score > 10` strict inequality and `filter_by = NULL`) were never evaluated. (2026-03-10)
 - Fixed orphan isotope rows (no base adduct row present) incorrectly upgraded to Level 2. Both `upgrade_confidence_with_evidence()` and `cap_confidence_with_evidence()` now count actual base rows (`n_base_rows`) separately from unique base adduct types (`n_base_adducts`). Isotope evidence tiers require `n_base_rows >= 1`, preventing lone isotope rows (e.g., `M+ACN+H_[+1]` with no `M+ACN+H` row) from being treated as isotope + base adduct evidence. (2026-03-10)
 
@@ -12,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - Added `level1_primary_adducts` parameter to `advanced_annotation()` (default: `c("M+H", "M-H")`). Controls which adducts qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`, allowing `filter_by = NULL` for equal Stage 4 scoring while still requiring primary ion evidence for Level 1. (2026-03-10)
 
 ### Changed
+- Sorted Stage4a and Stage4b output files by Confidence (descending), then compound_id, score, and Adduct. All rows for a compound are now grouped together, ordered from highest to lowest confidence. Matches the existing Stage5 sort order from `multilevelannotationstep5()`. (2026-03-10)
 - Renamed confidence level 4 label from "Boosted" to "Confirmed" in documentation. (2026-03-10)
 
 ### Fixed

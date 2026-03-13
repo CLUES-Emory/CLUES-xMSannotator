@@ -488,6 +488,13 @@ advanced_annotation <- function(peak_table,
   # Add human-readable confidence labels
   annotation <- add_confidence_labels(annotation)
 
+  # Sort: highest confidence first, grouped by compound
+  annotation <- annotation[order(
+    annotation$Confidence, annotation$compound_id,
+    annotation$score, annotation$Adduct,
+    decreasing = TRUE
+  ), ]
+
   # Output Stage4a: Full confidence level results (all rows, including incoherent)
   # ----------------------------
   stage4a_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
@@ -503,6 +510,13 @@ advanced_annotation <- function(peak_table,
   ))
   rownames(annotation) <- NULL
   # ----------------------------
+
+  # Re-sort after coherence filtering (split/rbind reorders by compound_id)
+  annotation <- annotation[order(
+    annotation$Confidence, annotation$compound_id,
+    annotation$score, annotation$Adduct,
+    decreasing = TRUE
+  ), ]
 
   # Output Stage4b: Coherent rows only (feeds Stage5)
   # ----------------------------
