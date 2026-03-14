@@ -21,7 +21,7 @@
 #-------------------------------------------------------------------------------
 #SBATCH --job-name=CLUES_xMSannot
 #SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=douglas.walker@emory.edu
+#SBATCH --mail-user=<your-email@email.com>
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=10
 #SBATCH --mem=128G
