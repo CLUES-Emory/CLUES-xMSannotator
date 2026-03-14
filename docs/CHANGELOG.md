@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed
+- Rewrote pipeline workflow reference document (`docs/xMSannotator_Workflow.md`) for clarity and usability. Added Quick Start section with minimal example, replaced ASCII data flow diagram with numbered stage list, added per-stage "Key questions" callout boxes, added worked scoring example for Stage 3, replaced Stage 4 prose with pseudocode decision flowchart, added Parameter Decision Guide (instrument/study/tuning), and added Common Issues troubleshooting section. All existing algorithmic content, tables, formulas, and function references preserved. (2026-03-13)
+
+### Added
+- Added comprehensive pipeline workflow reference document (`docs/xMSannotator_Workflow.md`). Covers all stages (1 through 5) with algorithmic details, scoring formulas, parameter defaults, theory explanations, data flow diagram, output file manifest, and full parameter reference table. (2026-03-13)
+
 ### Fixed
 - Fixed Stage 5 redundancy filtering reading stale pre-upgrade data. `init_chemscoremat()` in `multilevelannotationstep5.R` used `any(is.na())` to detect whether a data frame was passed, but annotation data frames contain legitimate NA values in `isotopologue`/`isotopologue_quality` columns, causing it to always fall back to reading the old `Stage4_confidence_levels.txt` file. This discarded all confidence upgrades, caps, labels, and coherence filtering — reverting 136 Conf 2 rows to Conf 0/1 and reintroducing 83 incoherent rows. Fix: changed sentinel check to `is_scalar_na()` (detects the default `NA` parameter vs. a real data frame), updated fallback to read `Stage4b_confidence_levels.txt` (post-coherence), and removed duplicate Stage5 file write from inside `multilevelannotationstep5()`. (2026-03-10)
 - Fixed single M+H/M-H annotations stuck at Confidence 0 — `cap_confidence_with_evidence()` now processes Level 0 compounds and rescues primary adduct matches to Level 1. Previously, cap only processed compounds with Confidence > 0, so single-row primary adduct matches that Stage 4 assigned Level 0 (due to `score > 10` strict inequality and `filter_by = NULL`) were never evaluated. (2026-03-10)
