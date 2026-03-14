@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+### Added
+- Added `docs/Stage5_Output_Reference.md` documenting all 19 columns in `Stage5_curated_results.txt` with definitions, data types, column origins, internal-to-output name mapping, and interpretation guides for Confidence and score. (2026-03-14)
+
 ### Changed
 - Audited `docs/xMSannotator_Workflow.md` against codebase (19/20 references correct). Fixed `almost_equal()` line reference in Stage 1 mass tolerance section, added missing `feature_id_column` to Key Parameters Reference table. (2026-03-14)
 - Updated `readme.md` with Documentation & Examples section containing a table of contents for all guides, example scripts, and developer docs. Added inline references to detailed docs from Pipeline Overview, Confidence Levels, and Installation sections. Updated `docs/README.md` to fix stale `data_transformation.md` link and list all current documents and scripts. (2026-03-14)

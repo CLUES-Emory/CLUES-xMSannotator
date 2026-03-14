@@ -15,6 +15,7 @@ An updated fork of [RECETOX/recetox-xMSannotator](https://github.com/RECETOX/rec
 | [Pipeline Workflow Reference](docs/xMSannotator_Workflow.md) | Complete 5-stage pipeline reference with scoring formulas, parameter guide, and troubleshooting |
 | [Input File Formats](docs/xMSannotator_Input_Formats.md) | API-level specification for all input tables, parameters, and working examples |
 | [Input Data Pre-Processing](docs/advanced_annotation_input_formatting.md) | XCMS feature table, sample mapfile, and compound database formats with pre-processing steps |
+| [Stage 5 Output Reference](docs/Stage5_Output_Reference.md) | Column definitions for the primary output file |
 | [Changelog](docs/CHANGELOG.md) | All notable changes, bug fixes, and new features |
 
 ### Example Scripts

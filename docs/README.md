@@ -7,6 +7,7 @@
 | [Pipeline Workflow Reference](xMSannotator_Workflow.md) | Complete 5-stage pipeline reference with scoring formulas, parameter decision guide, and troubleshooting |
 | [Input File Formats](xMSannotator_Input_Formats.md) | API-level specification for all input tables, `advanced_annotation()` parameters, and working examples |
 | [Input Data Pre-Processing](advanced_annotation_input_formatting.md) | XCMS feature table, sample mapfile, and compound database formats with pre-processing steps (blank removal, fold-change filtering, peak table construction) |
+| [Stage 5 Output Reference](Stage5_Output_Reference.md) | Column definitions and interpretation guide for Stage5_curated_results.txt |
 | [Changelog](CHANGELOG.md) | All notable changes, bug fixes, and new features |
 
 ## Example Scripts
