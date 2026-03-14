@@ -4,7 +4,18 @@
 
 CLUES.xMSannotator is a network-based annotation pipeline for LC-MS metabolomics data. Starting from a peak table (m/z, RT, intensities) and a compound database, it assigns putative identities to detected features through mass matching, co-abundance network analysis, isotope pattern verification, chemical scoring, pathway enrichment, confidence assignment, and redundancy filtering.
 
-The pipeline is a customized fork of the original xMSannotator by Karan Uppal (Emory University), extended with CLUES-Emory modifications. The entry point is `advanced_annotation()` in `R/advanced_annotation.R`.
+This pipeline is a customized fork of [RECETOX/recetox-xMSannotator](https://github.com/RECETOX/recetox-xMSannotator), 
+which is itself a refactored version of the original 
+[xMSannotator](https://doi.org/10.1021/acs.analchem.6b01214) R package 
+by Karan Uppal (Emory University). Key modifications in this fork include:
+
+- Evidence ceiling (Approach C) for post-hoc confidence adjustment
+- WGCNA module and RT coherence filtering
+- Support for `boosted_compounds` (user-verified standards → Confidence 4)
+- Multi-evidence chemical scoring with isotope, adduct, and correlation weighting
+- Intermediate stage output files (`Stage1_*.txt` through `Stage5_*.txt`) for inspection
+
+The entry point is `advanced_annotation()` in `R/advanced_annotation.R`.
 
 **Citation:** Uppal K, Walker DI, Jones DP. xMSannotator: an R package for network-based annotation of high-resolution metabolomics data. *Analytical Chemistry*. 2017;89(2):1063-1067.
 
@@ -94,7 +105,7 @@ expected_mz = (factor × M + adduct_mass) / charge
 
 ### Mass tolerance
 
-Applied as relative (ppm) tolerance via `almost_equal()` (line 42):
+Applied as relative (ppm) tolerance via `almost_equal()` (`match_by_mass.cpp`):
 
 ```
 |observed_mz − expected_mz| ≤ max(|observed_mz|, |expected_mz|) × tolerance
@@ -658,6 +669,7 @@ Before diving into the full parameter reference table, use the sections below to
 |-----------|---------|:-----:|-------------|
 | `mass_tolerance` | 5e-6 (5 ppm) | 1 | Relative mass tolerance for adduct matching |
 | `adduct_table` | 110 built-in adducts | 1 | Adduct definitions (charge, factor, mass) |
+| `feature_id_column` | NULL | all | Column name for custom feature IDs to preserve in all stage outputs |
 | `correlation_threshold` | 0.7 | 1.5, 3 | Module merge threshold; minimum correlation for scoring evidence |
 | `deep_split` | 2 | 1.5 | WGCNA tree cutting depth (0=conservative, 4=aggressive) |
 | `min_cluster_size` | 10 | 1.5 | Minimum peaks per WGCNA module |

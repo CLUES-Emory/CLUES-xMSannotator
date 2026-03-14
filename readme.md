@@ -6,7 +6,35 @@ An updated fork of [RECETOX/recetox-xMSannotator](https://github.com/RECETOX/rec
 
 **Lineage:** [kuppal2/xMSannotator](https://github.com/kuppal2/xMSannotator) (original) &#8594; [RECETOX/recetox-xMSannotator](https://github.com/RECETOX/recetox-xMSannotator) (refactored) &#8594; **CLUES-Emory/CLUES-xMSannotator** (this repo)
 
-For more details please have a look at the [Docs](docs/).
+## Documentation & Examples
+
+### Guides
+
+| Document | Description |
+|----------|-------------|
+| [Pipeline Workflow Reference](docs/xMSannotator_Workflow.md) | Complete 5-stage pipeline reference with scoring formulas, parameter guide, and troubleshooting |
+| [Input File Formats](docs/xMSannotator_Input_Formats.md) | API-level specification for all input tables, parameters, and working examples |
+| [Input Data Pre-Processing](docs/advanced_annotation_input_formatting.md) | XCMS feature table, sample mapfile, and compound database formats with pre-processing steps |
+| [Changelog](docs/CHANGELOG.md) | All notable changes, bug fixes, and new features |
+
+### Example Scripts
+
+| Script | Description |
+|--------|-------------|
+| [Example Runscript](inst/scripts/xMSannotator_CLUES_Runscript_Example.R) | Complete single-database annotation workflow |
+| [Multi-DB Runscript](inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R) | SLURM array job script for multi-database annotation |
+| [SLURM Wrapper](inst/scripts/run_CLUES_xMSannotator.sh) | Bash/SLURM submission script for dual-polarity batch jobs |
+
+### recetox-xMSannotator Developer & Legacy Docs
+
+| Document | Description |
+|----------|-------------|
+| [Developer Documentation](docs/developer_documentation.md) | Setup, code style, and testing framework |
+| [Testing](docs/testing.md) | testthat/patrick testing and code coverage |
+| [Modifications](docs/modifications.md) | Changes vs. original xMSannotator |
+| [Refactoring Patterns](docs/refactoring.md) | Design patterns used during refactoring |
+| [Possible Issues](docs/possible_issues.md) | Known issues from the original codebase |
+| [Research Reproducibility](docs/research_reproducibility.md) | Online data dependencies affecting reproducibility |
 
 ## Pipeline Overview
 
@@ -16,7 +44,7 @@ For more details please have a look at the [Docs](docs/).
 
 ***Figure 1. Overview of the xMSannotator annotation workflow.** The pipeline takes a peak table, compound database, and adduct table as inputs and proceeds through six stages: (1) brute-force mass matching within ppm tolerance, (1.5) WGCNA co-abundance network analysis with RT sub-clustering, (2) theoretical isotope envelope matching via enviPat, (3) multi-evidence chemical scoring combining adduct count, correlation, isotope confirmation, and RT coherence, (3b) pathway enrichment using Fisher's exact test, (4) confidence assignment (0–3) via decision-tree classification with module and RT coherence filtering, and (5) redundancy filtering to resolve multi-compound matches per feature. User-verified compounds supplied via the boosted_compounds parameter receive Confidence 4. The final output is a curated annotation table with confidence levels, chemical scores, and match categories.*
 
-The annotation pipeline runs through five stages via `advanced_annotation()`:
+The annotation pipeline runs through five stages via `advanced_annotation()`. See the [Pipeline Workflow Reference](docs/xMSannotator_Workflow.md) for full algorithmic details, scoring formulas, and parameter guidance.
 
 1. **Stage 1 - Mass Matching**: Matches observed m/z values to compound databases across all specified adducts. Assigns peaks to correlation-based modules and RT clusters.
 2. **Stage 2 - Isotope Detection**: Identifies isotopic peaks (M+1, M+2, etc.) based on mass differences, intensity ratios, and RT agreement.
@@ -50,6 +78,8 @@ Each annotation receives a numeric `Confidence` level (0-4) and a human-readable
 **RT coherence**: All adduct and isotope rows for a compound must fall within `time_tolerance` of each other to qualify for Confidence 2 or 3.
 
 **Primary adducts**: The `level1_primary_adducts` parameter (default: `c("M+H", "M-H")`) controls which adducts qualify for Confidence 1 as a single match. This is independent of `filter_by`, allowing `filter_by = NULL` for equal scoring while still requiring primary ion evidence for Level 1.
+
+For the complete confidence decision tree with worked examples, see the [Pipeline Workflow Reference](docs/xMSannotator_Workflow.md#stage-4--confidence-assignment).
 
 ## Summary of CLUES-Emory Changes
 
@@ -93,6 +123,8 @@ The package can be installed from GitHub:
 ```r
 devtools::install_github("CLUES-Emory/CLUES-xMSannotator")
 ```
+
+See the [Example Runscript](inst/scripts/xMSannotator_CLUES_Runscript_Example.R) for a complete working example, and the [Input File Formats](docs/xMSannotator_Input_Formats.md) guide for all parameter details.
 
 ## Reference
 

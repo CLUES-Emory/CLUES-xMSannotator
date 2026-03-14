@@ -392,7 +392,7 @@ result <- advanced_annotation(
 
 ## 6. Boosted Compounds (Optional)
 
-List of known/validated compounds to boost to confidence level 4. Boosted compounds receive Confidence=4 and their scores are multiplied by 100.
+List of known/validated compounds to boost to confidence level 4. Boosted compounds receive Confidence=4 (labeled "Confirmed") and their scores are multiplied by 100.
 
 ### Required Columns
 
@@ -476,7 +476,7 @@ result <- advanced_annotation(
 ### Notes
 
 - The `compound_id` column must match the `compound_id` values in your compound_table
-- Boosted annotations receive Confidence=4 (highest level) and score×100
+- Boosted annotations receive Confidence=4 ("Confirmed", highest level) and score×100
 - Tolerance parameters use the same format as main parameters: fractional for mass (e.g., `5e-6` = 5 ppm), seconds for time
 
 ---
@@ -652,6 +652,7 @@ The `advanced_annotation()` function accepts the following parameters:
 | `maximum_isotopes` | integer | `10` | Maximum isotope peaks to consider per compound |
 | `min_ions_per_chemical` | integer | `2` | Minimum ions required to annotate a chemical |
 | `filter_by` | character vector | `c("M-H", "M+H")` | Primary adducts for confidence scoring |
+| `level1_primary_adducts` | character vector | `c("M+H", "M-H")` | Adducts that qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`. |
 | `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
 | `redundancy_filtering` | logical | `TRUE` | Whether to remove redundant annotations |
 | `identify_isotopologues_flag` | logical | `TRUE` | Use enviPat to identify specific isotopologue substitutions (e.g., 13C:1 vs 15N:1) for isotope peaks. Adds `isotopologue` and `isotopologue_quality` columns to output. Requires `enviPat` package; gracefully skips if not installed. |
@@ -742,7 +743,7 @@ result <- advanced_annotation(
   boost_time_tolerance = 15,          # 15 second RT tolerance
   pathway_mode = "skip"
 )
-# Annotations matching validated compounds will have Confidence=4 and score×100
+# Annotations matching validated compounds will have Confidence=4 ("Confirmed") and score×100
 ```
 
 ---
@@ -881,5 +882,5 @@ tryCatch({
 ---
 
 *Document created: 2026-01-22*
-*Last updated: 2026-03-04*
+*Last updated: 2026-03-14*
 *For use with CLUES.xMSannotator v1.0.0*
