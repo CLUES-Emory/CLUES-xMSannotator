@@ -25,7 +25,7 @@ All intermediate results are saved as tab-delimited text files (`Stage1_*.txt` t
 <figure>
   <img src="docs/confidence levels.png" alt="Description" width="600">
   <figcaption>Figure 1. Overview of confidence level requirements. Final assigned confidence levels in Stage 5 output were determined using a post-hoc adjustment based upon approach C (evidence ceiling) to more correctly capture annotation supporting evidence. Note: Level 4 assignments correspond to Schymanski Level 1 confidence levels. Level 3 and 2 can be considered Schymanski Level 4. Level 1 and lower are consistent with Schymanski Level 5.</figcaption>
-</figure>
+</figure>  
 
 Each annotation receives a numeric `Confidence` level (0-4) and a human-readable `Confidence_Level` label in all output files. The final confidence is determined by hard evidence requirements enforced after all internal scoring steps.
 
