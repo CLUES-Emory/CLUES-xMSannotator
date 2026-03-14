@@ -10,6 +10,12 @@ For more details please have a look at the [Docs](docs/).
 
 ## Pipeline Overview
 
+<p align="center">
+  <img src="docs/xMSannotator_Workflow.png" alt="xMSannotator annotation workflow" width="600">
+</p>
+
+***Figure 1. Overview of the xMSannotator annotation workflow.** The pipeline takes a peak table, compound database, and adduct table as inputs and proceeds through six stages: (1) brute-force mass matching within ppm tolerance, (1.5) WGCNA co-abundance network analysis with RT sub-clustering, (2) theoretical isotope envelope matching via enviPat, (3) multi-evidence chemical scoring combining adduct count, correlation, isotope confirmation, and RT coherence, (3b) pathway enrichment using Fisher's exact test, (4) confidence assignment (0–3) via decision-tree classification with module and RT coherence filtering, and (5) redundancy filtering to resolve multi-compound matches per feature. User-verified compounds supplied via the boosted_compounds parameter receive Confidence 4. The final output is a curated annotation table with confidence levels, chemical scores, and match categories.*
+
 The annotation pipeline runs through five stages via `advanced_annotation()`:
 
 1. **Stage 1 - Mass Matching**: Matches observed m/z values to compound databases across all specified adducts. Assigns peaks to correlation-based modules and RT clusters.
@@ -26,7 +32,7 @@ All intermediate results are saved as tab-delimited text files (`Stage1_*.txt` t
   <img src="docs/confidence_levels_v2.png" alt="Overview of confidence level requirements" width="600">
 </p>
 
-***Figure 1. Overview of confidence level requirements.** Final assigned confidence levels in Stage 5 output were determined using a post-hoc adjustment based upon approach C (evidence ceiling) to more correctly capture annotation supporting evidence. Note: Level 4 assignments correspond to Schymanski Level 1 confidence levels. Level 3 and 2 can be considered Schymanski Level 4. Level 1 and lower are consistent with Schymanski Level 5.*
+***Figure 2. Overview of confidence level requirements.** Final assigned confidence levels in Stage 5 output were determined using a post-hoc adjustment based upon approach C (evidence ceiling) to more correctly capture annotation supporting evidence. Note: Level 4 assignments correspond to Schymanski Level 1 confidence levels. Level 3 and 2 can be considered Schymanski Level 4. Level 1 and lower are consistent with Schymanski Level 5.*
 
 
 Each annotation receives a numeric `Confidence` level (0-4) and a human-readable `Confidence_Level` label in all output files. The final confidence is determined by hard evidence requirements enforced after all internal scoring steps.
