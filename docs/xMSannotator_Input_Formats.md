@@ -41,7 +41,7 @@ Plus ONE of the following identifier columns:
 
 ### Identifier Behavior
 
-- **If `compound_id` is provided**: Your identifiers flow through the entire pipeline and appear as `compound_id` in all output files. An internal integer `compound` column is auto-generated.
+- **If `compound_id` is provided** and `compound` is also present, numeric, and unique: both columns are preserved as-is. If `compound` is missing or invalid, an internal integer `compound` column is auto-generated. Your `compound_id` values flow through the entire pipeline and appear in all output files.
 - **If only `compound` is provided**: Legacy mode. The `compound_id` in outputs will be formatted as "Formula_1", "Formula_2", etc.
 
 ### Example: With compound_id (Recommended)

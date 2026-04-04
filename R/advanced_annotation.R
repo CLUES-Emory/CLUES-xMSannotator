@@ -106,7 +106,7 @@ restore_peak_column <- function(annotation, peak_restore_map) {
 #'   Renames cur_chem_score to score (required by downstream functions) and writes output.
 #' @param chemscoremat Chemical score matrix from get_chemscore
 #' @param outloc Output directory
-#' @param mz_rt_feature_id_map Optional feature ID mapping
+#' @param mz_rt_feature_id_map Deprecated. Accepted for backward compatibility but ignored.
 #' @return chemscoremat with score column renamed
 skip_pathway_step <- function(chemscoremat, outloc, mz_rt_feature_id_map = NULL) {
   # Rename cur_chem_score to score (required by downstream functions)

@@ -44,7 +44,7 @@ multilevelannotationstep4(
 
 \item{max_isp}{Maximum isotope peaks}
 
-\item{mz_rt_feature_id_map}{Feature ID mapping (NULL or data frame)}
+\item{mz_rt_feature_id_map}{Deprecated. Accepted for backward compatibility but ignored.}
 
 \item{adduct_table}{Adduct table (NULL = use package default)}
 

@@ -51,6 +51,8 @@ compute_num_kernel_points <- function(data) {
 #'
 #' @return Kernel density estimate [stats::density()].
 estimate_kernel_density <- function(data, width = 1, kernel = "gaussian") {
+  if (length(data) == 0) return(list(x = numeric(0), y = numeric(0)))
+
   start <- max(min(data) - 1, 0)
   end <- max(data) + 1
 
@@ -74,6 +76,8 @@ estimate_kernel_density <- function(data, width = 1, kernel = "gaussian") {
 #'
 #' @return Positions of dense clusters.
 compute_cluster_positions <- function(data, width = 1, kernel = "gaussian", show = FALSE) {
+  if (length(data) == 0) return(numeric(0))
+
   pdf <- estimate_kernel_density(data, width = width, kernel = kernel)
   peak_indices <- compute_peak_indices(pdf$y)
   if (show) plot_clustering(pdf, data, peak_indices)
@@ -91,6 +95,8 @@ compute_cluster_positions <- function(data, width = 1, kernel = "gaussian", show
 #'
 #' @importFrom RANN nn2
 compute_cluster_assignments <- function(clusters, data) {
+  if (length(clusters) == 0 || length(data) == 0) return(integer(0))
+
   query <- as.vector(data)
   model <- nn2(clusters, query, k = 1)
   return(model$nn.idx[, 1])
@@ -107,6 +113,11 @@ compute_cluster_assignments <- function(clusters, data) {
 #' @export
 #' @import dplyr
 compute_rt_modules <- function(peak_table, peak_width = 1, show = FALSE) {
+  if (nrow(peak_table) == 0) {
+    return(tibble(peak = integer(0), mean_intensity = numeric(0),
+                  module = integer(0), rt_cluster = integer(0)))
+  }
+
   rt_cluster <- {}
 
   for (subdata in peak_table %>% group_split(module)) {

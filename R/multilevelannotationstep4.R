@@ -722,7 +722,7 @@ boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs,
 #' @param boost.mz.diff Mass tolerance for boosting (NULL = use max.mz.diff)
 #' @param boost.rt.diff RT tolerance for boosting (NULL = use max.rt.diff)
 #' @param max_isp Maximum isotope peaks
-#' @param mz_rt_feature_id_map Feature ID mapping (NULL or data frame)
+#' @param mz_rt_feature_id_map Deprecated. Accepted for backward compatibility but ignored.
 #' @param adduct_table Adduct table (NULL = use package default)
 #' @param multimer_abundance_check Check multimer abundance ratios
 #'
