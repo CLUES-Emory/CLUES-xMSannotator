@@ -41,6 +41,10 @@ reformat_annotation_table <- function(annotation) {
       MD = as.numeric(sprintf("0.%1.0f", annotation$mass_defect))
     )
 
+  if ("peak" %in% names(annotation)) {
+    master_annotation$peak <- annotation$peak
+  }
+
   return(master_annotation)
 }
 

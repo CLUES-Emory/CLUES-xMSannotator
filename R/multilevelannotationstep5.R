@@ -25,8 +25,9 @@ reevaluate_multimatches_score <- function(single_molecule_annotation) {
   return(score)
 }
 
-get_features <- function(mz, match) {
-  feature_count <- table(mz)
+get_features <- function(mz, time, match) {
+  feature_key <- paste(mz, time, sep = "_")
+  feature_count <- table(feature_key)
   features <- switch(match,
     "multiple" = feature_count[which(feature_count > 1)],
     "unique" = feature_count[which(feature_count == 1)]
@@ -35,8 +36,9 @@ get_features <- function(mz, match) {
   return(features)
 }
 
-compute_multimatches <- function(mz, curated_res, adduct_weights) {
-  multimatches_idx <- which(curated_res$mz %in% mz)
+compute_multimatches <- function(feature_key, curated_res, adduct_weights) {
+  cur_keys <- paste(curated_res$mz, curated_res$time, sep = "_")
+  multimatches_idx <- which(cur_keys %in% feature_key)
   multimatch_features <- increase_multimatches_score(curated_res[multimatches_idx, ], adduct_weights)
   max_score_idx <- which(multimatch_features$score == max(multimatch_features$score, na.rm = TRUE))
   multimatches_idx <- multimatches_idx[-max_score_idx]
@@ -64,7 +66,7 @@ multilevelannotationstep5 <- function(outloc,
     decreasing = TRUE
   ), ]
 
-  duplicated_features <- get_features(curated_res$mz, "multiple")
+  duplicated_features <- get_features(curated_res$mz, curated_res$time, "multiple")
 
   lower_score_multimatches_idx <- unlist(lapply(
     duplicated_features,
@@ -72,14 +74,15 @@ multilevelannotationstep5 <- function(outloc,
     curated_res,
     adduct_weights
   ))
-  
+
   if (length(lower_score_multimatches_idx) > 0) {
     curated_res <- curated_res[-c(lower_score_multimatches_idx), ]
   }
 
-  unique_features <- get_features(curated_res$mz, "unique")
+  unique_features <- get_features(curated_res$mz, curated_res$time, "unique")
   curated_res$MatchCategory <- rep("Multiple", nrow(curated_res))
-  curated_res$MatchCategory[which(curated_res$mz %in% unique_features)] <- "Unique"
+  cur_keys <- paste(curated_res$mz, curated_res$time, sep = "_")
+  curated_res$MatchCategory[which(cur_keys %in% unique_features)] <- "Unique"
 
   return(curated_res)
 }

@@ -36,6 +36,7 @@ advanced_annotation(
   boost_mass_tolerance = NULL,
   boost_time_tolerance = NULL,
   identify_isotopologues_flag = TRUE,
+  level1_primary_adducts = c("M+H", "M-H"),
   outloc = tempdir(),
   n_workers = parallel::detectCores()
 )

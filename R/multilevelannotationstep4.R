@@ -197,6 +197,9 @@ apply_rt_clustering_rules <- function(curdata, cur_adducts, adduct_weights, filt
   # RT spread exceeds threshold - need clustering
   current_conf <- CONF_NAME_NONE
 
+  # Save the module prefix before reclustering overwrites Module_RTclust
+  module_prefix <- gsub("_[0-9]*$", "", as.character(curdata$Module_RTclust[1]))
+
   groupB <- group_by_rt(curdata, time_step = 3, max.rt.diff = max_diff_rt, groupnum = "")
   groupB <- groupB[order(groupB$mz), ]
   curdata <- curdata[order(curdata$mz), ]
@@ -231,7 +234,7 @@ apply_rt_clustering_rules <- function(curdata, cur_adducts, adduct_weights, filt
     }
   }
 
-  curdata$Module_RTclust <- paste0(curdata$module_num, curdata$Module_RTclust)
+  curdata$Module_RTclust <- paste0(module_prefix, curdata$Module_RTclust)
 
   list(curdata = as.data.frame(curdata), conf = current_conf)
 }
@@ -749,7 +752,7 @@ multilevelannotationstep4 <- function(outloc,
 
   # Load package adduct_table if not provided
   if (is.null(adduct_table)) {
-    data("adduct_table", envir = environment())
+    adduct_table <- sample_adduct_table
   }
 
   # Process adduct weights ONCE (not inside loop)

@@ -9,7 +9,7 @@ safe_join_feature_id(data, feature_id_map, feature_id_column)
 \arguments{
 \item{data}{Data frame to join to}
 
-\item{feature_id_map}{Mapping table with mz, time, and feature_id columns}
+\item{feature_id_map}{Mapping table with peak and feature_id columns}
 
 \item{feature_id_column}{Name of the feature_id column}
 }
@@ -17,6 +17,6 @@ safe_join_feature_id(data, feature_id_map, feature_id_column)
 Data frame with feature_id column (if not already present)
 }
 \description{
-Prevents duplicate feature_id.x and feature_id.y columns
-when feature_id has already been joined by internal functions.
+Joins on \code{peak} when available (unique key), otherwise falls
+back to \verb{(mz, time)} with deduplication to avoid row multiplication.
 }

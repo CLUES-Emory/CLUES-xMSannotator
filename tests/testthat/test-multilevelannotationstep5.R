@@ -126,3 +126,47 @@ test_that("multilevelannotationstep5 preserves extra columns", {
   expect_true("isotopologue_quality" %in% names(result))
   expect_true("MatchCategory" %in% names(result))
 })
+
+test_that("same mz, different time are not collapsed", {
+  df <- data.frame(
+    compound_id = c("C001", "C002", "C003"),
+    mz = c(100.05, 100.05, 200.10),
+    time = c(60.0, 120.0, 60.0),
+    Adduct = c("M+H", "M+H", "M+H"),
+    score = c(50, 30, 40),
+    Confidence = c(2, 1, 2),
+    Module_RTclust = c("1_1", "1_1", "2_1"),
+    stringsAsFactors = FALSE
+  )
+
+  result <- multilevelannotationstep5(
+    outloc = tempdir(),
+    chemscoremat = df
+  )
+
+  expect_equal(nrow(result), 3)
+  expect_true(all(c("C001", "C002", "C003") %in% result$compound_id))
+  expect_true(all(result$MatchCategory == "Unique"))
+})
+
+test_that("same mz and time collapses to best annotation", {
+  df <- data.frame(
+    compound_id = c("C001", "C002"),
+    mz = c(100.05, 100.05),
+    time = c(60.0, 60.0),
+    Adduct = c("M+H", "M+H"),
+    score = c(50, 30),
+    Confidence = c(2, 1),
+    Module_RTclust = c("1_1", "1_1"),
+    stringsAsFactors = FALSE
+  )
+
+  result <- multilevelannotationstep5(
+    outloc = tempdir(),
+    chemscoremat = df
+  )
+
+  expect_equal(nrow(result), 1)
+  expect_equal(result$compound_id, "C001")
+  expect_equal(result$MatchCategory, "Unique")
+})

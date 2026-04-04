@@ -124,7 +124,7 @@ compute_pathways <- function(
   exluded_pathway_compounds = NULL,
   score_threshold = 0.1
 ) {
-  significant_annotations <- filter(annotations, .data$score >= !!score_threshold, !is.na(.data$adduct_weight))
+  significant_annotations <- filter(annotations, .data$score >= !!score_threshold)
   significant_annotations <- semi_join(significant_annotations, adduct_weights, by = 'adduct')
   significant_compounds <- unique(significant_annotations$compound)
 
