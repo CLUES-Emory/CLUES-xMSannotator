@@ -81,24 +81,38 @@ safe_join_feature_id <- function(data, feature_id_map, feature_id_column) {
   if ("peak" %in% names(data) && "peak" %in% names(feature_id_map)) {
     return(left_join(data, feature_id_map, by = "peak"))
   }
-  # Fallback: join on (mz, time) with a deduplicated map to prevent row duplication
+  # Fallback: join on (mz, time), keeping only unambiguous pairs.
+  # Ambiguous pairs (multiple peaks sharing the same mz+time) get NA.
   if (all(c("mz", "time") %in% names(feature_id_map))) {
-    deduped <- feature_id_map[!duplicated(feature_id_map[, c("mz", "time")]), ]
-    return(left_join(data, deduped[, c("mz", "time", feature_id_column)], by = c("mz", "time")))
+    mt <- feature_id_map[, c("mz", "time")]
+    ambiguous <- duplicated(mt) | duplicated(mt, fromLast = TRUE)
+    if (any(ambiguous)) {
+      n <- sum(duplicated(mt))
+      warning(n, " ambiguous (mz, time) pair(s) in feature_id_map; ",
+              "feature IDs set to NA for affected rows")
+    }
+    unambiguous <- feature_id_map[!ambiguous, c("mz", "time", feature_id_column)]
+    return(left_join(data, unambiguous, by = c("mz", "time")))
   }
   data
 }
 
 #' Restore peak column on annotation after a pipeline stage strips it
 #' @param annotation Data frame potentially missing peak column
-#' @param peak_restore_map Deduplicated (mz, time) -> peak lookup
-#' @return annotation with peak column
+#' @param peak_restore_map Unambiguous (mz, time) -> peak lookup
+#' @return annotation with peak column (NA where mz/time was ambiguous)
 #' @import dplyr
 restore_peak_column <- function(annotation, peak_restore_map) {
   if (is.null(peak_restore_map)) return(annotation)
   if ("peak" %in% names(annotation)) return(annotation)
   if (is.null(annotation) || nrow(annotation) == 0) return(annotation)
-  left_join(annotation, peak_restore_map, by = c("mz", "time"))
+  result <- left_join(annotation, peak_restore_map, by = c("mz", "time"))
+  n_missing <- sum(is.na(result$peak))
+  if (n_missing > 0) {
+    warning(n_missing, " row(s) could not be mapped back to a peak; ",
+            "peak set to NA (ambiguous mz/time)")
+  }
+  result
 }
 
 #' Skip pathway matching step
@@ -186,7 +200,8 @@ advanced_annotation <- function(peak_table,
     boosted_compounds <- as_boosted_compounds_table(boosted_compounds, boost_match_by)
   }
 
-  if (is.numeric(n_workers) && n_workers > 1) {
+  if (is.numeric(n_workers) && length(n_workers) == 1 &&
+      !is.na(n_workers) && is.finite(n_workers) && n_workers > 1) {
     WGCNA::allowWGCNAThreads(n_workers)
   }
 
@@ -226,9 +241,11 @@ advanced_annotation <- function(peak_table,
       feature_id_map$mz <- peak_table$mz
       feature_id_map$time <- peak_table$rt
       # Lookup to restore peak column after stages that strip it.
-      # Deduplicated on (mz, time) so fallback joins cannot multiply rows.
+      # Only unambiguous (mz, time) pairs are kept; ambiguous ones get NA from join.
       peak_restore_map <- tibble(mz = peak_table$mz, time = peak_table$rt, peak = peak_table$peak)
-      peak_restore_map <- peak_restore_map[!duplicated(peak_restore_map[, c("mz", "time")]), ]
+      mt <- peak_restore_map[, c("mz", "time")]
+      ambig <- duplicated(mt) | duplicated(mt, fromLast = TRUE)
+      peak_restore_map <- peak_restore_map[!ambig, ]
     }
   }
 

@@ -9,10 +9,10 @@ restore_peak_column(annotation, peak_restore_map)
 \arguments{
 \item{annotation}{Data frame potentially missing peak column}
 
-\item{peak_restore_map}{Deduplicated (mz, time) -> peak lookup}
+\item{peak_restore_map}{Unambiguous (mz, time) -> peak lookup}
 }
 \value{
-annotation with peak column
+annotation with peak column (NA where mz/time was ambiguous)
 }
 \description{
 Restore peak column on annotation after a pipeline stage strips it

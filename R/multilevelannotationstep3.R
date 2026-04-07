@@ -266,9 +266,8 @@ multilevelannotationstep3 <- function(chemscoremat,
       chemscoremat <- chemscoremat[-bad_indices, ]
     }
 
-    data(hmdbAllinf)
+    data(hmdbAllinf, envir = environment())
     hmdbAllinfv3.5 <- hmdbAllinf[, -c(26:27)]
-    rm(hmdbAllinf, envir = .GlobalEnv)
     db <- preprocess_db(hmdbAllinfv3.5, 14, "SM")
     chemscoremat <- merge(chemscoremat,
       hmdbAllinfv3.5,

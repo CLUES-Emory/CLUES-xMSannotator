@@ -12,7 +12,6 @@
 #' @param max_diff_rt Maximum retention time difference for grouping (seconds).
 #' @param adduct_weights Data frame with adduct names and their weights.
 #' @param filter.by Character vector of expected adducts.
-#' @param mass_defect_window Mass defect window for isotope filtering.
 #' @param MplusH.abundance.ratio.check Logical; if TRUE, check that secondary
 #'   adducts have lower intensity than the primary M+H or M-H adduct.
 #' @param adduct_table Data frame with adduct definitions.
@@ -28,7 +27,6 @@ get_chemscore <- function(...,
                           max_diff_rt = 10,
                           adduct_weights,
                           filter.by,
-                          mass_defect_window = 0.01,
                           MplusH.abundance.ratio.check = TRUE,
                           adduct_table) {
 

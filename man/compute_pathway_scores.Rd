@@ -2,16 +2,21 @@
 % Please edit documentation in R/compute_pathways.R
 \name{compute_pathway_scores}
 \alias{compute_pathway_scores}
-\title{For each pathway compute a score}
+\title{For each pathway compute a score based on compound co-occurrence.}
 \usage{
 compute_pathway_scores(pathways)
 }
 \arguments{
-\item{pathways}{}
+\item{pathways}{data frame with \code{pathway} and \code{compound} columns,
+pre-filtered to enriched pathways via \code{remove_indipendent_pathways()}.}
 }
 \value{
-pathway table with a new pathway_score column
+pathway table with a new \code{pathway_score} column
 }
 \description{
-For each pathway compute a score
+Scores each compound-pathway pair by the number of distinct significant
+compounds in that pathway. Pathways with fewer than 3 significant compounds
+are excluded (insufficient evidence). This mirrors the legacy scoring rule
+in \code{compute_score_pathways()} where the score boost equalled the count
+of co-occurring pathway compounds.
 }

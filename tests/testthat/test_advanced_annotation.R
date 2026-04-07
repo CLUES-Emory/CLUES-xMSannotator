@@ -101,15 +101,16 @@ test_that("safe_join_feature_id uses peak key, no row duplication", {
   expect_equal(result$my_fid, c("F1", "F2", "F3"))
 })
 
-test_that("safe_join_feature_id falls back to (mz,time) without peak", {
-  # Data without peak column (post-scoring stage)
+test_that("safe_join_feature_id (mz,time) fallback: ambiguous pairs get NA, not first-match", {
+  # Two data rows with identical (mz, time) but originally from different peaks
   data <- data.frame(
-    mz = c(100.05, 200.10),
-    time = c(60.0, 120.0),
-    compound = c("A", "B"),
+    mz = c(100.05, 100.05, 200.10),
+    time = c(60.0, 60.0, 120.0),
+    compound = c("A", "B", "C"),
     stringsAsFactors = FALSE
   )
 
+  # Map has two peaks sharing (100.05, 60.0) — ambiguous when peak column is absent
   fid_map <- data.frame(
     peak = c(1L, 2L, 3L),
     mz = c(100.05, 100.05, 200.10),
@@ -118,9 +119,88 @@ test_that("safe_join_feature_id falls back to (mz,time) without peak", {
     stringsAsFactors = FALSE
   )
 
-  result <- safe_join_feature_id(data, fid_map, "my_fid")
+  result <- expect_warning(
+    safe_join_feature_id(data, fid_map, "my_fid"),
+    "ambiguous"
+  )
 
-  # Fallback deduplication: no row multiplication
+  # No row multiplication
+  expect_equal(nrow(result), 3L)
+  # Ambiguous rows get NA, not silent first-match
+  expect_true(is.na(result$my_fid[1]))
+  expect_true(is.na(result$my_fid[2]))
+  # Unambiguous row still assigned correctly
+  expect_equal(result$my_fid[3], "F3")
+})
+
+test_that("safe_join_feature_id (mz,time) fallback: unique pairs still work", {
+  data <- data.frame(
+    mz = c(100.05, 200.10),
+    time = c(60.0, 120.0),
+    compound = c("A", "B"),
+    stringsAsFactors = FALSE
+  )
+
+  fid_map <- data.frame(
+    peak = c(1L, 3L),
+    mz = c(100.05, 200.10),
+    time = c(60.0, 120.0),
+    my_fid = c("F1", "F3"),
+    stringsAsFactors = FALSE
+  )
+
+  # No warning for unambiguous data
+  expect_silent(safe_join_feature_id(data, fid_map, "my_fid"))
+  result <- safe_join_feature_id(data, fid_map, "my_fid")
   expect_equal(nrow(result), 2L)
-  expect_true("my_fid" %in% names(result))
+  expect_equal(result$my_fid, c("F1", "F3"))
+})
+
+test_that("restore_peak_column warns on ambiguous (mz,time) pairs", {
+  annotation <- data.frame(
+    mz = c(100.05, 100.05, 200.10),
+    time = c(60.0, 60.0, 120.0),
+    score = c(1.0, 2.0, 3.0),
+    stringsAsFactors = FALSE
+  )
+
+  # Unambiguous map: only unique (mz, time) -> peak
+  # (100.05, 60.0) was ambiguous and excluded from peak_restore_map
+  peak_map <- data.frame(
+    mz = 200.10,
+    time = 120.0,
+    peak = 3L,
+    stringsAsFactors = FALSE
+  )
+
+  expect_warning(
+    result <- CLUES.xMSannotator:::restore_peak_column(annotation, peak_map),
+    "could not be mapped"
+  )
+
+  expect_equal(nrow(result), 3L)
+  # Ambiguous rows: peak is NA
+  expect_true(is.na(result$peak[1]))
+  expect_true(is.na(result$peak[2]))
+  # Unambiguous row: correct peak
+  expect_equal(result$peak[3], 3L)
+})
+
+test_that("n_workers = NA does not crash the worker guard", {
+  # Simulates parallel::detectCores() returning NA on some systems
+  n_workers_guard <- function(n_workers) {
+    if (is.numeric(n_workers) && length(n_workers) == 1 &&
+        !is.na(n_workers) && is.finite(n_workers) && n_workers > 1) {
+      return("multi")
+    }
+    "single"
+  }
+
+  expect_equal(n_workers_guard(NA_integer_), "single")
+  expect_equal(n_workers_guard(NA_real_), "single")
+  expect_equal(n_workers_guard(NA), "single")
+  expect_equal(n_workers_guard(NULL), "single")
+  expect_equal(n_workers_guard(Inf), "single")
+  expect_equal(n_workers_guard(1), "single")
+  expect_equal(n_workers_guard(4), "multi")
 })
