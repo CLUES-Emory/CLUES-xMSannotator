@@ -111,7 +111,7 @@ Bug fixes, new features, and code cleanup were completed using [Claude Code](htt
 - Fixed `feature_id_column` validation error with non-numeric IDs, duplicate feature_id columns in stage outputs, Stage 5 output creation, `rm()` warnings in `get_confidence_stage4()`
 
 ### Code Cleanup
-- Removed ~1500 lines of dead code not used by `advanced_annotation()` workflow (`get_confidence_stage2.R`, `multilevelannotationstep2.R`, `get_chemscorev1.6.71.R`, `group_by_rt_histv2.R`, `compute_confidence_levels.R`)
+- Consolidated helper functions from standalone files (`get_confidence_stage2.R`, `group_by_rt_histv2.R`) into `chemscore_helpers.R` and deleted the originals. Removed truly dead code files not used by `advanced_annotation()` workflow (`multilevelannotationstep2.R`, `get_chemscorev1.6.71.R`, `compute_confidence_levels.R`)
 - Removed experimental permutation-based p-value testing (~650 lines, never production-ready)
 - Removed all `setwd()` calls from pipeline functions, replaced with `file.path()` absolute paths
 - Removed unused `ISgroup` column, redundant `time.y` column, redundant `forms_valid_adduct_pair` filter, and `remove_tmp_files()` auto-cleanup

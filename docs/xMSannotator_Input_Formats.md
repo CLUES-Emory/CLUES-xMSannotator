@@ -655,7 +655,7 @@ The `advanced_annotation()` function accepts the following parameters:
 | `level1_primary_adducts` | character vector | `c("M+H", "M-H")` | Adducts that qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`. |
 | `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
 | `redundancy_filtering` | logical | `TRUE` | Whether to remove redundant annotations |
-| `identify_isotopologues_flag` | logical | `TRUE` | Use enviPat to identify specific isotopologue substitutions (e.g., 13C:1 vs 15N:1) for isotope peaks. Adds `isotopologue` and `isotopologue_quality` columns to output. Requires `enviPat` package; gracefully skips if not installed. |
+| `identify_isotopologues_flag` | logical | `TRUE` | Use enviPat to identify specific isotopologue substitutions (e.g., 13C:1 vs 15N:1) for isotope peaks. Adds `isotopologue` and `isotopologue_quality` columns to output. Requires `enviPat` package (listed in Imports; always installed with the package). |
 | `pathway_mode` | character | `"HMDB"` | Pathway matching mode: "HMDB" (default), "custom", or "skip" |
 | `pathway_data` | data.frame | `NULL` | Custom pathway-compound mappings (required if pathway_mode = "custom") |
 | `excluded_pathways` | character vector | `NULL` | Pathways to exclude from analysis |

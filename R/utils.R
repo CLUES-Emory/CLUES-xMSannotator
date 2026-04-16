@@ -1,3 +1,17 @@
+#' Get the default adduct table shipped with the package.
+#'
+#' Returns a copy of the built-in 110-row adduct table covering positive and
+#' negative ionization modes. Use this instead of accessing the internal
+#' \code{sample_adduct_table} object directly.
+#'
+#' @return A data.frame with columns \code{adduct}, \code{charge},
+#'   \code{mass}, and \code{factor}.
+#' @export
+get_default_adduct_table <- function() {
+  as.data.frame(sample_adduct_table)
+}
+
+
 lexicographic_rank <- function(...) {
   .o <- order(...)
   .x <- cbind(...)[.o,]
