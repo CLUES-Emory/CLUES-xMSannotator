@@ -1,3 +1,17 @@
+#' Get the default adduct table shipped with the package.
+#'
+#' Returns a copy of the built-in 110-row adduct table covering positive and
+#' negative ionization modes. Use this instead of accessing the internal
+#' \code{sample_adduct_table} object directly.
+#'
+#' @return A data.frame with columns \code{adduct}, \code{charge},
+#'   \code{mass}, and \code{factor}.
+#' @export
+get_default_adduct_table <- function() {
+  as.data.frame(sample_adduct_table)
+}
+
+
 lexicographic_rank <- function(...) {
   .o <- order(...)
   .x <- cbind(...)[.o,]
@@ -51,21 +65,29 @@ as_adduct_table <- function(data) {
 #' @param data Compound database. Can contain either:
 #'   - `compound_id` (character): User-defined compound identifiers (e.g., "HMDB0000001")
 #'   - `compound` (numeric): Legacy integer compound IDs
-#'   If `compound_id` is provided, an integer `compound` column is auto-generated.
-#'   If only `compound` is provided, `compound_id` is created as "Formula_<compound>".
+#'   If `compound_id` is provided and `compound` is also present, numeric, and
+#'   unique, the supplied `compound` values are preserved. If `compound_id` is
+#'   provided but `compound` is missing or invalid, an integer `compound` column
+#'   is auto-generated. If only `compound` is provided, `compound_id` is created
+#'   as `"Formula_<compound>"`.
 #' @return Compound table with required columns and expected types.
 #' @import dplyr
 as_compound_table <- function(data) {
   has_compound_id <- "compound_id" %in% names(data)
 
   if (has_compound_id) {
-    # User provided compound_id - validate and auto-generate integer compound
+    # User provided compound_id - validate and preserve or auto-generate compound
     stopifnot(is.character(data$compound_id) || is.numeric(data$compound_id))
     data$compound_id <- as.character(data$compound_id)
     stopifnot(anyDuplicated(data$compound_id) == 0)
 
-    # Auto-generate integer compound column for internal C++ processing
-    data$compound <- seq_len(nrow(data))
+    # Auto-generate integer compound column only when not already valid
+    has_valid_compound <- "compound" %in% names(data) &&
+      is.numeric(data$compound) &&
+      anyDuplicated(data$compound) == 0
+    if (!has_valid_compound) {
+      data$compound <- seq_len(nrow(data))
+    }
 
     required <- c("monoisotopic_mass", "molecular_formula", "compound", "compound_id", "name")
   } else {
@@ -204,7 +226,7 @@ load_expected_adducts_csv <- function (file) {
 #' @return Validated boosted compounds table.
 #' @export
 load_boost_compounds_csv <- function (file) {
-  data <- load_csv(file, columns = c("compound", "mz", "rt"))
+  data <- load_csv(file, columns = c("compound_id", "mz", "rt"))
   as_boosted_compounds_table(data)
 }
 

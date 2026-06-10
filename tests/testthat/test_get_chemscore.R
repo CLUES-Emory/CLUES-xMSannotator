@@ -36,7 +36,6 @@ patrick::with_parameters_test_that("Compute chemscore can be called isolated", {
         isotopes,
         ~get_chemscore(...,
           annotation = isotopes,
-          mass_defect_window = mass_defect_window,
           adduct_weights = adduct_weights,
           corthresh = corthresh,
           global_cor = global_cor,
@@ -119,7 +118,6 @@ test_that("Chemscores range from 0 to Inf", {
     annotation,
     ~ get_chemscore(...,
       annotation = annotation,
-      mass_defect_window = 0.01,
       adduct_weights = adduct_weights,
       corthresh = 0.7,
       global_cor = global_cor,
@@ -130,4 +128,9 @@ test_that("Chemscores range from 0 to Inf", {
   )
   expect_equal(min(actual$cur_chem_score), 0)
   expect_gt(max(actual$cur_chem_score), 10^5)
+})
+
+
+test_that("get_chemscore does not accept removed mass_defect_window parameter", {
+  expect_false("mass_defect_window" %in% names(formals(get_chemscore)))
 })

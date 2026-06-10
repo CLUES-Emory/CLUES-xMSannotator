@@ -200,7 +200,7 @@ names(db_metafile)[names(db_metafile) == "Formula_ID"] <- "compound_id"
 # =============================================================================
 
 # Load the package's built-in adduct table
-adduct_table <- CLUES.xMSannotator:::sample_adduct_table
+adduct_table <- get_default_adduct_table()
 
 # Select adducts based on ionization mode
 if (charge_type == "pos") {
@@ -343,7 +343,7 @@ cat("\n", format(Sys.time(), "%a %b %d %X %Y"), "\n")
 if (redundancy_filtering) {
   results_file <- file.path(outloc, "Stage5_curated_results.txt")
 } else {
-  results_file <- file.path(outloc, "Stage4_confidence_levels.txt")
+  results_file <- file.path(outloc, "Stage4b_confidence_levels.txt")
 }
 
 results <- read.table(results_file, sep = "\t", header = TRUE)

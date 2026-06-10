@@ -41,7 +41,7 @@ Plus ONE of the following identifier columns:
 
 ### Identifier Behavior
 
-- **If `compound_id` is provided**: Your identifiers flow through the entire pipeline and appear as `compound_id` in all output files. An internal integer `compound` column is auto-generated.
+- **If `compound_id` is provided** and `compound` is also present, numeric, and unique: both columns are preserved as-is. If `compound` is missing or invalid, an internal integer `compound` column is auto-generated. Your `compound_id` values flow through the entire pipeline and appear in all output files.
 - **If only `compound` is provided**: Legacy mode. The `compound_id` in outputs will be formatted as "Formula_1", "Formula_2", etc.
 
 ### Example: With compound_id (Recommended)
@@ -655,7 +655,7 @@ The `advanced_annotation()` function accepts the following parameters:
 | `level1_primary_adducts` | character vector | `c("M+H", "M-H")` | Adducts that qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`. |
 | `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
 | `redundancy_filtering` | logical | `TRUE` | Whether to remove redundant annotations |
-| `identify_isotopologues_flag` | logical | `TRUE` | Use enviPat to identify specific isotopologue substitutions (e.g., 13C:1 vs 15N:1) for isotope peaks. Adds `isotopologue` and `isotopologue_quality` columns to output. Requires `enviPat` package; gracefully skips if not installed. |
+| `identify_isotopologues_flag` | logical | `TRUE` | Use enviPat to identify specific isotopologue substitutions (e.g., 13C:1 vs 15N:1) for isotope peaks. Adds `isotopologue` and `isotopologue_quality` columns to output. Requires `enviPat` package (listed in Imports; always installed with the package). |
 | `pathway_mode` | character | `"HMDB"` | Pathway matching mode: "HMDB" (default), "custom", or "skip" |
 | `pathway_data` | data.frame | `NULL` | Custom pathway-compound mappings (required if pathway_mode = "custom") |
 | `excluded_pathways` | character vector | `NULL` | Pathways to exclude from analysis |

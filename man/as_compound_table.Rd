@@ -11,8 +11,11 @@ as_compound_table(data)
 \itemize{
 \item \code{compound_id} (character): User-defined compound identifiers (e.g., "HMDB0000001")
 \item \code{compound} (numeric): Legacy integer compound IDs
-If \code{compound_id} is provided, an integer \code{compound} column is auto-generated.
-If only \code{compound} is provided, \code{compound_id} is created as "Formula_\if{html}{\out{<compound>}}".
+If \code{compound_id} is provided and \code{compound} is also present, numeric, and
+unique, the supplied \code{compound} values are preserved. If \code{compound_id} is
+provided but \code{compound} is missing or invalid, an integer \code{compound} column
+is auto-generated. If only \code{compound} is provided, \code{compound_id} is created
+as \code{"Formula_<compound>"}.
 }}
 }
 \value{

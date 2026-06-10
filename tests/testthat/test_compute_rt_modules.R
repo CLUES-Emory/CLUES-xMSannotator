@@ -90,3 +90,31 @@ patrick::with_parameters_test_that("compute_cluster_assignments can handle vario
         expected = c(1, 1)
     )
 ))
+
+test_that("estimate_kernel_density returns empty on empty input", {
+  result <- CLUES.xMSannotator:::estimate_kernel_density(numeric(0))
+  expect_equal(length(result$x), 0)
+  expect_equal(length(result$y), 0)
+})
+
+test_that("compute_cluster_positions returns empty on empty input", {
+  result <- CLUES.xMSannotator:::compute_cluster_positions(numeric(0))
+  expect_equal(length(result), 0)
+  expect_is(result, "numeric")
+})
+
+test_that("compute_cluster_assignments returns empty on empty input", {
+  result <- compute_cluster_assignments(numeric(0), numeric(0))
+  expect_equal(length(result), 0)
+  expect_is(result, "integer")
+})
+
+test_that("compute_rt_modules returns correct empty table on empty input", {
+  empty_table <- data.frame(
+    peak = integer(0), rt = numeric(0),
+    module = integer(0), mean_intensity = numeric(0)
+  )
+  result <- compute_rt_modules(empty_table)
+  expect_equal(nrow(result), 0)
+  expect_true(all(c("peak", "mean_intensity", "module", "rt_cluster") %in% names(result)))
+})

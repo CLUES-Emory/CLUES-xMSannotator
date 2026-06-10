@@ -4,7 +4,9 @@ Version: 1.0.0
 Authors@R: c(
     person("Karan", "Uppal", email = "kuppal2@emory.edu", role = "aut"),
     person("Jiri", "Novotny", email = "409963@muni.cz", role = "ctb"),
-    person("CLUES-Emory", email = "clues@emory.edu", role = "cre"))
+    person("CLUES-Emory", role = "cre", email = "clues@emory.edu"))
+Author: Karan Uppal [aut], Jiri Novotny [ctb], CLUES-Emory [cre]
+Maintainer: CLUES-Emory <clues@emory.edu>
 Description: This is a customized fork of the original work from Karan Uppal.
              The package contains various functions for LC-MS data annotation, filtering and quality assessment.
 License: GPL (>= 2)
@@ -33,7 +35,8 @@ Imports:
     Rdisop,
     foreach,
     tibble (>= 3.1.5),
-    enviPat
+    enviPat,
+    stringr
 Suggests:
     testthat (>= 3.0.0),
     arrow (>= 9.0.0),

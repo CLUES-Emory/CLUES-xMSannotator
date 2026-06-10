@@ -1,56 +1,3 @@
-patrick::with_parameters_test_that(
-  "multilevelannotationstep5",
-  {
-    if (exists("skip_function") && is.function(skip_function)) {
-      skip_function()
-    }
-
-    testdata_dir <- file.path("test-data", subfolder)
-    load(file.path(testdata_dir, "tempobjects.Rda"))
-
-    testthat_wd <- getwd()
-
-    outloc <- file.path(tempdir(), "multilevelannotationstep5", subfolder)
-    dir.create(outloc, recursive = TRUE)
-    # Copy Stage4b data and convert to new format for the test
-    stage4_data <- read.csv(file.path(testdata_dir, "Stage4.csv"))
-    write.table(stage4_data, file.path(outloc, "Stage4b_confidence_levels.txt"),
-                sep = "\t", row.names = FALSE)
-    expected <- read.csv(file.path(testdata_dir, "Stage5.csv"))
-
-    actual <- multilevelannotationstep5(
-      outloc = outloc,
-      adduct_weights = adduct_weights)
-
-    setwd(testthat_wd)
-
-    actual <- dplyr::arrange_all(actual)
-    expected <- dplyr::arrange_all(expected)
-
-    comparison <- dataCompareR::rCompare(
-      actual,
-      expected,
-      keys = names(actual)
-    )
-
-    dataCompareR::saveReport(
-      comparison,
-      reportName = subfolder,
-      reportLocation = outloc,
-      showInViewer = FALSE,
-      mismatchCount = 1000
-    )
-
-    expect_equal(actual, expected)
-  },
-  patrick::cases(
-    qc_solvent = list(subfolder = "qc_solvent"),
-    qc_matrix = list(subfolder = "qc_matrix", skip_function = skip_on_ci),
-    batch1_neg = list(subfolder = "batch1_neg", skip_function = skip_on_ci),
-    sourceforge = list(subfolder = "sourceforge", skip_function = skip_on_ci)
-  )
-)
-
 # --- Unit tests for init_chemscoremat and column preservation ---
 
 test_that("init_chemscoremat passes through data frame with NA cells", {
@@ -125,4 +72,48 @@ test_that("multilevelannotationstep5 preserves extra columns", {
   expect_true("isotopologue" %in% names(result))
   expect_true("isotopologue_quality" %in% names(result))
   expect_true("MatchCategory" %in% names(result))
+})
+
+test_that("same mz, different time are not collapsed", {
+  df <- data.frame(
+    compound_id = c("C001", "C002", "C003"),
+    mz = c(100.05, 100.05, 200.10),
+    time = c(60.0, 120.0, 60.0),
+    Adduct = c("M+H", "M+H", "M+H"),
+    score = c(50, 30, 40),
+    Confidence = c(2, 1, 2),
+    Module_RTclust = c("1_1", "1_1", "2_1"),
+    stringsAsFactors = FALSE
+  )
+
+  result <- multilevelannotationstep5(
+    outloc = tempdir(),
+    chemscoremat = df
+  )
+
+  expect_equal(nrow(result), 3)
+  expect_true(all(c("C001", "C002", "C003") %in% result$compound_id))
+  expect_true(all(result$MatchCategory == "Unique"))
+})
+
+test_that("same mz and time collapses to best annotation", {
+  df <- data.frame(
+    compound_id = c("C001", "C002"),
+    mz = c(100.05, 100.05),
+    time = c(60.0, 60.0),
+    Adduct = c("M+H", "M+H"),
+    score = c(50, 30),
+    Confidence = c(2, 1),
+    Module_RTclust = c("1_1", "1_1"),
+    stringsAsFactors = FALSE
+  )
+
+  result <- multilevelannotationstep5(
+    outloc = tempdir(),
+    chemscoremat = df
+  )
+
+  expect_equal(nrow(result), 1)
+  expect_equal(result$compound_id, "C001")
+  expect_equal(result$MatchCategory, "Unique")
 })

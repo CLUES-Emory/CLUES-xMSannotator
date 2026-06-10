@@ -67,10 +67,10 @@ print_confidence_distribution <- function(annotation) {
 }
 
 #' Safely join feature_id column only if it doesn't already exist
-#' @description Prevents duplicate feature_id.x and feature_id.y columns
-#'   when feature_id has already been joined by internal functions.
+#' @description Joins on `peak` when available (unique key), otherwise falls
+#'   back to `(mz, time)` with deduplication to avoid row multiplication.
 #' @param data Data frame to join to
-#' @param feature_id_map Mapping table with mz, time, and feature_id columns
+#' @param feature_id_map Mapping table with peak and feature_id columns
 #' @param feature_id_column Name of the feature_id column
 #' @return Data frame with feature_id column (if not already present)
 #' @import dplyr
@@ -78,7 +78,41 @@ safe_join_feature_id <- function(data, feature_id_map, feature_id_column) {
   if (is.null(feature_id_map)) return(data)
   if (is.null(feature_id_column)) return(data)
   if (feature_id_column %in% names(data)) return(data)  # Already has it
-  left_join(data, feature_id_map, by = c("mz", "time"))
+  if ("peak" %in% names(data) && "peak" %in% names(feature_id_map)) {
+    return(left_join(data, feature_id_map, by = "peak"))
+  }
+  # Fallback: join on (mz, time), keeping only unambiguous pairs.
+  # Ambiguous pairs (multiple peaks sharing the same mz+time) get NA.
+  if (all(c("mz", "time") %in% names(feature_id_map))) {
+    mt <- feature_id_map[, c("mz", "time")]
+    ambiguous <- duplicated(mt) | duplicated(mt, fromLast = TRUE)
+    if (any(ambiguous)) {
+      n <- sum(duplicated(mt))
+      warning(n, " ambiguous (mz, time) pair(s) in feature_id_map; ",
+              "feature IDs set to NA for affected rows")
+    }
+    unambiguous <- feature_id_map[!ambiguous, c("mz", "time", feature_id_column)]
+    return(left_join(data, unambiguous, by = c("mz", "time")))
+  }
+  data
+}
+
+#' Restore peak column on annotation after a pipeline stage strips it
+#' @param annotation Data frame potentially missing peak column
+#' @param peak_restore_map Unambiguous (mz, time) -> peak lookup
+#' @return annotation with peak column (NA where mz/time was ambiguous)
+#' @import dplyr
+restore_peak_column <- function(annotation, peak_restore_map) {
+  if (is.null(peak_restore_map)) return(annotation)
+  if ("peak" %in% names(annotation)) return(annotation)
+  if (is.null(annotation) || nrow(annotation) == 0) return(annotation)
+  result <- left_join(annotation, peak_restore_map, by = c("mz", "time"))
+  n_missing <- sum(is.na(result$peak))
+  if (n_missing > 0) {
+    warning(n_missing, " row(s) could not be mapped back to a peak; ",
+            "peak set to NA (ambiguous mz/time)")
+  }
+  result
 }
 
 #' Skip pathway matching step
@@ -86,7 +120,7 @@ safe_join_feature_id <- function(data, feature_id_map, feature_id_column) {
 #'   Renames cur_chem_score to score (required by downstream functions) and writes output.
 #' @param chemscoremat Chemical score matrix from get_chemscore
 #' @param outloc Output directory
-#' @param mz_rt_feature_id_map Optional feature ID mapping
+#' @param mz_rt_feature_id_map Deprecated. Accepted for backward compatibility but ignored.
 #' @return chemscoremat with score column renamed
 skip_pathway_step <- function(chemscoremat, outloc, mz_rt_feature_id_map = NULL) {
   # Rename cur_chem_score to score (required by downstream functions)
@@ -166,7 +200,8 @@ advanced_annotation <- function(peak_table,
     boosted_compounds <- as_boosted_compounds_table(boosted_compounds, boost_match_by)
   }
 
-  if (is.numeric(n_workers) && n_workers > 1) {
+  if (is.numeric(n_workers) && length(n_workers) == 1 &&
+      !is.na(n_workers) && is.finite(n_workers) && n_workers > 1) {
     WGCNA::allowWGCNAThreads(n_workers)
   }
 
@@ -192,22 +227,25 @@ advanced_annotation <- function(peak_table,
 
   # Create feature ID mapping if user specified a column
   feature_id_map <- NULL
-  mz_rt_feature_id_map <- NULL
+  peak_restore_map <- NULL
   if (!is.null(feature_id_column)) {
     if (!feature_id_column %in% colnames(peak_table_orig)) {
       warning(paste("feature_id_column", feature_id_column, "not found in peak_table"))
     } else {
-      # Map by peak (for Stage 1 outputs before reformat)
+      # Map by peak (unique key, used for all feature_id joins)
       feature_id_map <- tibble(
         peak = peak_table$peak,
         !!feature_id_column := peak_table_orig[[feature_id_column]]
       )
-      # Map by mz + time (for downstream stages where peak column is lost)
-      mz_rt_feature_id_map <- tibble(
-        mz = peak_table$mz,
-        time = peak_table$rt,
-        !!feature_id_column := peak_table_orig[[feature_id_column]]
-      )
+      # Also include (mz, time) in the map for fallback joins
+      feature_id_map$mz <- peak_table$mz
+      feature_id_map$time <- peak_table$rt
+      # Lookup to restore peak column after stages that strip it.
+      # Only unambiguous (mz, time) pairs are kept; ambiguous ones get NA from join.
+      peak_restore_map <- tibble(mz = peak_table$mz, time = peak_table$rt, peak = peak_table$peak)
+      mt <- peak_restore_map[, c("mz", "time")]
+      ambig <- duplicated(mt) | duplicated(mt, fromLast = TRUE)
+      peak_restore_map <- peak_restore_map[!ambig, ]
     }
   }
 
@@ -359,13 +397,16 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage2: Isotope detection results
   # ----------------------------
-  stage2_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
+  stage2_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
   write.table(stage2_output, file = file.path(outloc, "Stage2_isotope_detection.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
 
   # Tool 8: Compute chemscores
   # ----------------------------
+  # Strip peak before scoring (hardcoded column indices in helpers break with extra cols)
+  annotation$peak <- NULL
+
   # Get unique compound_ids and process each once.
   # NOTE: distinct() only controls how many times get_chemscore is CALLED.
   # Inside get_chemscore, it queries the FULL annotation table for all rows
@@ -386,22 +427,27 @@ advanced_annotation <- function(peak_table,
                     adduct_table = adduct_table
     )
   )
+
+  # Restore peak column after scoring
+  annotation <- restore_peak_column(annotation, peak_restore_map)
   # ----------------------------
 
   # Output Stage3: Chemical score results
   # ----------------------------
-  stage3_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
+  stage3_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
   write.table(stage3_output, file = file.path(outloc, "Stage3_chemical_scores.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
 
   # Tool 9: pathway matching
   # ----------------------------
+  # Strip peak before pathway step (hardcoded column selection in step3)
+  annotation$peak <- NULL
+
   if (pathway_mode == "skip") {
     annotation <- skip_pathway_step(
       chemscoremat = annotation,
-      outloc = outloc,
-      mz_rt_feature_id_map = mz_rt_feature_id_map
+      outloc = outloc
     )
   } else if (pathway_mode == "custom") {
     annotation <- multilevelannotationstep3(
@@ -411,7 +457,6 @@ advanced_annotation <- function(peak_table,
       max_diff_rt = time_tolerance,
       pathwaycheckmode = "pm",
       outloc = outloc,
-      mz_rt_feature_id_map = mz_rt_feature_id_map,
       pathway_data = pathway_data,
       excluded_pathways = excluded_pathways,
       excluded_pathway_compounds = excluded_pathway_compounds
@@ -428,14 +473,19 @@ advanced_annotation <- function(peak_table,
       max_diff_rt = time_tolerance,
       pathwaycheckmode = "pm",
       outloc = outloc,
-      mz_rt_feature_id_map = mz_rt_feature_id_map,
       chemCompMZ = chemCompMZ
     )
   }
+
+  # Restore peak column after pathway step
+  annotation <- restore_peak_column(annotation, peak_restore_map)
   # ----------------------------
 
   # Tool 10: compute confidence levels
   # ----------------------------
+  # Strip peak before confidence assignment (hardcoded column handling)
+  annotation$peak <- NULL
+
   annotation <- multilevelannotationstep4(
     outloc = outloc,
     chemscoremat = annotation,
@@ -445,13 +495,15 @@ advanced_annotation <- function(peak_table,
     adduct_weights = adduct_weights,
     max_isp = maximum_isotopes,
     min_ions_perchem = min_ions_per_chemical,
-    mz_rt_feature_id_map = mz_rt_feature_id_map,
     boostIDs = if (!is.null(boosted_compounds)) boosted_compounds else NA,
     boost.mz.diff = boost_mass_tolerance,
     boost.rt.diff = boost_time_tolerance,
     adduct_table = adduct_table,
     multimer_abundance_check = multimer_abundance_check
   )
+
+  # Restore peak column after confidence assignment
+  annotation <- restore_peak_column(annotation, peak_restore_map)
   # ----------------------------
 
   # Tool 10b: Identify isotopologues
@@ -497,7 +549,7 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage4a: Full confidence level results (all rows, including incoherent)
   # ----------------------------
-  stage4a_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
+  stage4a_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
   write.table(stage4a_output, file = file.path(outloc, "Stage4a_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
@@ -520,7 +572,7 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage4b: Coherent rows only (feeds Stage5)
   # ----------------------------
-  stage4b_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
+  stage4b_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
   write.table(stage4b_output, file = file.path(outloc, "Stage4b_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
@@ -533,11 +585,17 @@ advanced_annotation <- function(peak_table,
   if (redundancy_filtering) {
     # Tool 12: redundancy filtering
     # ----------------------------
+    # Strip peak before step5 (it selects by column names it expects)
+    annotation$peak <- NULL
+
     annotation <- multilevelannotationstep5(
       outloc = outloc,
       adduct_weights = adduct_weights,
       chemscoremat = annotation
     )
+
+    # Restore peak column after redundancy filtering
+    annotation <- restore_peak_column(annotation, peak_restore_map)
     # ----------------------------
 
     # Re-use the confidence distrivution printing tool
@@ -547,14 +605,14 @@ advanced_annotation <- function(peak_table,
 
     # Output Stage5: Curated results after redundancy filtering
     # ----------------------------
-    stage5_output <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
+    stage5_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
     write.table(stage5_output, file = file.path(outloc, "Stage5_curated_results.txt"),
                 sep = "\t", row.names = FALSE)
     # ----------------------------
   }
 
   # Join feature ID column to final annotation (for return value)
-  annotation <- safe_join_feature_id(annotation, mz_rt_feature_id_map, feature_id_column)
+  annotation <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
 
   annotation
 }

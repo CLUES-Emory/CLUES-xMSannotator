@@ -77,14 +77,25 @@ compute_dominant_modules <- function(annotations) {
 }
 
 
-#' For each pathway compute a score
+#' For each pathway compute a score based on compound co-occurrence.
 #'
-#' @param pathways
+#' Scores each compound-pathway pair by the number of distinct significant
+#' compounds in that pathway. Pathways with fewer than 3 significant compounds
+#' are excluded (insufficient evidence). This mirrors the legacy scoring rule
+#' in \code{compute_score_pathways()} where the score boost equalled the count
+#' of co-occurring pathway compounds.
 #'
-#' @return pathway table with a new pathway_score column
-compute_pathway_scores <- function (pathways) {
-  # TODO: rewrite line 67-144 of pathway_hmdb file
-  mutate(pathways, pathway_score = 0)
+#' @param pathways data frame with \code{pathway} and \code{compound} columns,
+#'   pre-filtered to enriched pathways via \code{remove_indipendent_pathways()}.
+#'
+#' @return pathway table with a new \code{pathway_score} column
+compute_pathway_scores <- function(pathways) {
+  if (nrow(pathways) == 0) return(mutate(pathways, pathway_score = numeric(0)))
+
+  pathways <- with_groups(pathways, .data$pathway, mutate,
+    pathway_score = n_distinct(.data$compound)
+  )
+  filter(pathways, .data$pathway_score >= 3)
 }
 
 
@@ -124,7 +135,7 @@ compute_pathways <- function(
   exluded_pathway_compounds = NULL,
   score_threshold = 0.1
 ) {
-  significant_annotations <- filter(annotations, .data$score >= !!score_threshold, !is.na(.data$adduct_weight))
+  significant_annotations <- filter(annotations, .data$score >= !!score_threshold)
   significant_annotations <- semi_join(significant_annotations, adduct_weights, by = 'adduct')
   significant_compounds <- unique(significant_annotations$compound)
 

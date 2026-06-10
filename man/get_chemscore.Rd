@@ -12,7 +12,6 @@ get_chemscore(
   max_diff_rt = 10,
   adduct_weights,
   filter.by,
-  mass_defect_window = 0.01,
   MplusH.abundance.ratio.check = TRUE,
   adduct_table
 )
@@ -31,8 +30,6 @@ get_chemscore(
 \item{adduct_weights}{Data frame with adduct names and their weights.}
 
 \item{filter.by}{Character vector of expected adducts.}
-
-\item{mass_defect_window}{Mass defect window for isotope filtering.}
 
 \item{MplusH.abundance.ratio.check}{Logical; if TRUE, check that secondary
 adducts have lower intensity than the primary M+H or M-H adduct.}

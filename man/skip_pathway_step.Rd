@@ -11,7 +11,7 @@ skip_pathway_step(chemscoremat, outloc, mz_rt_feature_id_map = NULL)
 
 \item{outloc}{Output directory}
 
-\item{mz_rt_feature_id_map}{Optional feature ID mapping}
+\item{mz_rt_feature_id_map}{Deprecated. Accepted for backward compatibility but ignored.}
 }
 \value{
 chemscoremat with score column renamed

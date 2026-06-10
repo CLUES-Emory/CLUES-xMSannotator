@@ -33,7 +33,7 @@ peak_table     <- data.table::fread("feature_table.txt", data.table = FALSE)
 compound_table <- readxl::read_xlsx("compound_database.xlsx")
 
 # Filter adduct table to positive-mode adducts
-adduct_table <- CLUES.xMSannotator:::sample_adduct_table
+adduct_table <- get_default_adduct_table()
 adduct_table <- adduct_table[adduct_table$adduct %in%
   c("M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O"), ]
 
@@ -53,7 +53,7 @@ annotation <- advanced_annotation(
 )
 ```
 
-After a successful run, the output directory will contain tab-delimited text files for each pipeline stage: `Stage1_mass_matched.txt`, `Stage1_peak_clusters.txt`, `Stage2_isotope_detection.txt`, `Stage3_chemical_scores.txt`, a Stage 3 pathway file, `Stage4a_confidence_levels.txt`, `Stage4b_confidence_levels.txt`, and `Stage5_curated_results.txt`. The final curated result in `Stage5_curated_results.txt` is the primary output — each row is a putative annotation with a confidence level (0–3), a chemical score, and a MatchCategory indicating whether the feature matched one or multiple compounds.
+After a successful run, the output directory will contain tab-delimited text files for each pipeline stage: `Stage1_mass_matched.txt`, `Stage1_peak_clusters.txt`, `Stage2_isotope_detection.txt`, `Stage3_chemical_scores.txt`, a Stage 3 pathway file, `Stage4a_confidence_levels.txt`, `Stage4b_confidence_levels.txt`, and `Stage5_curated_results.txt`. The final curated result in `Stage5_curated_results.txt` is the primary output — each row is a putative annotation with a confidence level (0–4), a chemical score, and a MatchCategory indicating whether the feature matched one or multiple compounds.
 
 ---
 
@@ -71,7 +71,7 @@ The pipeline runs seven processing steps in sequence. Each step consumes upstrea
 
 5. **Stage 3b — Pathway Enrichment.** Tests whether annotated compounds are enriched in known biological pathways using Fisher's exact test, and boosts scores for pathway-supported annotations. Consumes Stage 3 scores and a pathway database. Produces `Stage3_HMDB_pathways.txt` (or `Stage3_custom_pathways.txt` or `Stage3_pathway_skipped.txt`).
 
-6. **Stage 4 — Confidence Assignment.** Translates continuous scores into discrete confidence levels (0–3) based on evidence thresholds, then filters to coherent annotations. Consumes Stage 3b output. Produces `Stage4a_confidence_levels.txt` (all rows) and `Stage4b_confidence_levels.txt` (coherent rows only).
+6. **Stage 4 — Confidence Assignment.** Translates continuous scores into discrete confidence levels (0–4) based on evidence thresholds, then filters to coherent annotations. Consumes Stage 3b output. Produces `Stage4a_confidence_levels.txt` (all rows) and `Stage4b_confidence_levels.txt` (coherent rows only).
 
 7. **Stage 5 — Redundancy Filtering.** Resolves features matched to multiple compounds by selecting the best-supported annotation at each m/z. Consumes Stage 4b output. Produces `Stage5_curated_results.txt`.
 
@@ -444,7 +444,7 @@ The `cur_chem_score` column is renamed to `score` at this stage.
 
 ### Theory
 
-Chemical scores are continuous values that resist intuitive interpretation. Confidence levels translate multi-evidence support into a discrete 0–3 scale that communicates the strength of annotation evidence at a glance. Higher confidence requires convergent evidence from multiple independent sources (adducts, isotopes, module co-membership, RT coherence).
+Chemical scores are continuous values that resist intuitive interpretation. Confidence levels translate multi-evidence support into a discrete 0–4 scale that communicates the strength of annotation evidence at a glance. Higher confidence requires convergent evidence from multiple independent sources (adducts, isotopes, module co-membership, RT coherence).
 
 ### Confidence levels
 
