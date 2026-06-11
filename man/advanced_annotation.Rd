@@ -26,7 +26,7 @@ advanced_annotation(
   min_ions_per_chemical = 2,
   filter_by = c("M-H", "M+H"),
   network_type = "unsigned",
-  redundancy_filtering = TRUE,
+  redundancy_filtering = FALSE,
   pathway_mode = "HMDB",
   pathway_data = NULL,
   excluded_pathways = NULL,

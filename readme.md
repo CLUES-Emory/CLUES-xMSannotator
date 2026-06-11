@@ -51,9 +51,9 @@ The annotation pipeline runs through five stages via `advanced_annotation()`. Se
 2. **Stage 2 - Isotope Detection**: Identifies isotopic peaks (M+1, M+2, etc.) based on mass differences, intensity ratios, and RT agreement.
 3. **Stage 3 - Chemical Scoring**: Scores each compound annotation using adduct correlation evidence, module membership, and isotope support. Optionally integrates pathway enrichment (HMDB or custom).
 4. **Stage 4 - Confidence Assignment**: Assigns confidence levels (0-4) based on adduct evidence, isotope detection, RT coherence, and module coherence. Enforces hard evidence requirements via a post-hoc cap (see [Confidence Levels](#confidence-levels)). Identifies isotopologues (e.g., 13C, 15N substitutions). Adds `Confidence_Level` text labels to output. Outputs Stage4a (all rows) and Stage4b (coherent rows only); Stage 5 uses Stage4b.
-5. **Stage 5 - Redundancy Filtering**: Curates annotations by removing redundant entries, keeping the highest-confidence annotation per feature.
+5. **Stage 5 - Redundancy Filtering (opt-in)**: When `redundancy_filtering = TRUE`, resolves features matched to multiple compounds to a single row per `(mz, time)`. Off by default — `Stage4b_confidence_levels.txt` is the canonical final output, since Stage 5's deletion of losing-compound rows can orphan the secondary adduct and isotope evidence that other compounds' confidence values were computed from.
 
-All intermediate results are saved as tab-delimited text files (`Stage1_*.txt` through `Stage5_*.txt`) for inspection.
+All intermediate results are saved as tab-delimited text files (`Stage1_*.txt` through `Stage4b_*.txt`) for inspection. `Stage5_curated_results.txt` is produced only when `redundancy_filtering = TRUE`.
 
 ## Confidence Levels
 
@@ -96,8 +96,9 @@ Bug fixes, new features, and code cleanup were completed using [Claude Code](htt
 - **Evidence-based confidence**: hard evidence requirements enforced via post-hoc cap — Confidence 3 requires isotope evidence, Confidence 2 requires multiple adducts, Confidence 1 requires a primary ion match (see [Confidence Levels](#confidence-levels))
 - **Confidence labels**: `Confidence_Level` text column (None/Low/Medium/High/Confirmed) added to all output files
 - **Primary adduct parameter**: `level1_primary_adducts` controls which single-adduct matches qualify for Confidence 1 (default: M+H, M-H), independent of `filter_by`
-- **Module coherence filtering**: compounds spanning multiple peak modules are filtered to the largest module group before confidence evaluation, preventing stray matches from inflating confidence. Stage 4 outputs split into Stage4a (all rows) and Stage4b (coherent only); Stage 5 uses Stage4b
-- **Stage outputs**: all intermediate results saved as tab-delimited text files (Stage1 through Stage5) for inspection
+- **Module coherence filtering**: compounds spanning multiple peak modules are filtered to the largest module group before confidence evaluation, preventing stray matches from inflating confidence. Stage 4 outputs split into Stage4a (all rows) and Stage4b (coherent only)
+- **Stage 4b as default final output**: `redundancy_filtering` defaults to `FALSE`, making `Stage4b_confidence_levels.txt` the canonical user-facing output. Stage 5 (one row per `(mz, time)` via destructive deletion of losing-compound rows) is opt-in via `redundancy_filtering = TRUE` for users who specifically want a single-annotation-per-peak view
+- **Stage outputs**: all intermediate results saved as tab-delimited text files (Stage1 through Stage4b, plus Stage5 when opted in) for inspection
 - **Adduct/isotope summaries**: console output summarizing adduct detection and isotope detection after each step
 - **Abundance checks**: configurable `multimer_abundance_check` and `MplusH_abundance_ratio_check` parameters
 

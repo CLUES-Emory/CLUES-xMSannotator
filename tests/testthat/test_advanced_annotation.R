@@ -20,6 +20,7 @@ patrick::with_parameters_test_that("basic advanced_annotation functionality", {
     peak_rt_width = peak_rt_width,
     time_tolerance = time_tolerance,
     intensity_deviation_tolerance = intensity_deviation_tolerance,
+    redundancy_filtering = TRUE,
     outloc = outloc
   )
 
