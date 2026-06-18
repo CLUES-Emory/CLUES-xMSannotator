@@ -654,7 +654,7 @@ The `advanced_annotation()` function accepts the following parameters:
 | `filter_by` | character vector | `c("M-H", "M+H")` | Primary adducts for confidence scoring |
 | `level1_primary_adducts` | character vector | `c("M+H", "M-H")` | Adducts that qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`. |
 | `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
-| `redundancy_filtering` | logical | `TRUE` | Whether to remove redundant annotations |
+| `redundancy_filtering` | logical | `FALSE` | Opt-in Stage 5 multi-match resolution. `FALSE` (default) keeps `Stage4b_confidence_levels.txt` as the canonical final output, preserving the full evidence basis behind every confidence value. `TRUE` additionally writes `Stage5_curated_results.txt` with one row per `(mz, time)`; losing-compound rows (including their secondary adduct and isotope rows) are deleted, which can leave other rows of the same compound displaying confidence values computed from evidence no longer present in the file. |
 | `identify_isotopologues_flag` | logical | `TRUE` | Use enviPat to identify specific isotopologue substitutions (e.g., 13C:1 vs 15N:1) for isotope peaks. Adds `isotopologue` and `isotopologue_quality` columns to output. Requires `enviPat` package (listed in Imports; always installed with the package). |
 | `pathway_mode` | character | `"HMDB"` | Pathway matching mode: "HMDB" (default), "custom", or "skip" |
 | `pathway_data` | data.frame | `NULL` | Custom pathway-compound mappings (required if pathway_mode = "custom") |

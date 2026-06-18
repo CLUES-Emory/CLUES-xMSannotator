@@ -1,6 +1,8 @@
 # Stage 5 Output Column Reference
 
-`Stage5_curated_results.txt` is the primary output of the CLUES.xMSannotator annotation pipeline. It contains one row per curated annotation after redundancy filtering — each row is a putative compound identification with a confidence level, chemical score, and match metadata.
+> **Note (opt-in output):** As of the 2026 release, `Stage5_curated_results.txt` is produced only when `redundancy_filtering = TRUE`. The canonical final output of the pipeline is now `Stage4b_confidence_levels.txt`, which preserves the full evidence basis behind every confidence value. The column reference below still applies for users who opt in to Stage 5; the columns are identical to Stage 4b plus `MatchCategory`. For confidence-faithful downstream analysis, prefer Stage 4b.
+
+`Stage5_curated_results.txt` contains one row per curated annotation after redundancy filtering — each row is a putative compound identification with a confidence level, chemical score, and match metadata. Rows belonging to losing compounds at multi-match `(mz, time)` features have been deleted.
 
 **Format:** Tab-delimited text file.
 

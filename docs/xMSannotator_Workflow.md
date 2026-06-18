@@ -13,7 +13,7 @@ by Karan Uppal (Emory University). Key modifications in this fork include:
 - WGCNA module and RT coherence filtering
 - Support for `boosted_compounds` (user-verified standards → Confidence 4)
 - Multi-evidence chemical scoring with isotope, adduct, and correlation weighting
-- Intermediate stage output files (`Stage1_*.txt` through `Stage5_*.txt`) for inspection
+- Intermediate stage output files (`Stage1_*.txt` through `Stage4b_*.txt`) for inspection. `Stage4b_confidence_levels.txt` is the canonical final output; `Stage5_curated_results.txt` is written only when `redundancy_filtering = TRUE` (opt-in).
 
 The entry point is `advanced_annotation()` in `R/advanced_annotation.R`.
 
@@ -53,7 +53,9 @@ annotation <- advanced_annotation(
 )
 ```
 
-After a successful run, the output directory will contain tab-delimited text files for each pipeline stage: `Stage1_mass_matched.txt`, `Stage1_peak_clusters.txt`, `Stage2_isotope_detection.txt`, `Stage3_chemical_scores.txt`, a Stage 3 pathway file, `Stage4a_confidence_levels.txt`, `Stage4b_confidence_levels.txt`, and `Stage5_curated_results.txt`. The final curated result in `Stage5_curated_results.txt` is the primary output — each row is a putative annotation with a confidence level (0–4), a chemical score, and a MatchCategory indicating whether the feature matched one or multiple compounds.
+After a successful run, the output directory will contain tab-delimited text files for each pipeline stage: `Stage1_mass_matched.txt`, `Stage1_peak_clusters.txt`, `Stage2_isotope_detection.txt`, `Stage3_chemical_scores.txt`, a Stage 3 pathway file, `Stage4a_confidence_levels.txt`, and `Stage4b_confidence_levels.txt`. `Stage4b_confidence_levels.txt` is the primary output — each row is a putative annotation with a confidence level (0–4) backed by the full evidence basis used to compute it.
+
+`Stage5_curated_results.txt` is produced only when `redundancy_filtering = TRUE` (opt-in). Stage 5 resolves multi-match features to a single compound per `(mz, time)` by deleting losing-compound rows; this is convenient for a one-row-per-peak view but discards the secondary adduct and isotope rows that contributed to other compounds' confidence values. For confidence-faithful downstream analysis, prefer Stage 4b.
 
 ---
 
@@ -73,7 +75,7 @@ The pipeline runs seven processing steps in sequence. Each step consumes upstrea
 
 6. **Stage 4 — Confidence Assignment.** Translates continuous scores into discrete confidence levels (0–4) based on evidence thresholds, then filters to coherent annotations. Consumes Stage 3b output. Produces `Stage4a_confidence_levels.txt` (all rows) and `Stage4b_confidence_levels.txt` (coherent rows only).
 
-7. **Stage 5 — Redundancy Filtering.** Resolves features matched to multiple compounds by selecting the best-supported annotation at each m/z. Consumes Stage 4b output. Produces `Stage5_curated_results.txt`.
+7. **Stage 5 — Redundancy Filtering (opt-in).** Resolves features matched to multiple compounds by selecting one row per `(mz, time)` and deleting the others. Consumes Stage 4b output. Produces `Stage5_curated_results.txt`. Off by default because the deletion is destructive on multi-match `(mz, time)` evidence — it removes secondary adduct and isotope rows belonging to losing compounds, which can leave those compounds' remaining rows displaying confidence values computed from evidence that no longer appears in the file. Enable via `redundancy_filtering = TRUE` when a one-row-per-peak summary is more useful than evidence integrity.
 
 Each stage adds an independent layer of evidence to the annotation. Stage 1 provides the initial mass-match candidates. Stage 1.5 adds co-abundance structure (which features behave similarly across samples). Stage 2 adds isotope-pattern confirmation. Stage 3 synthesizes these signals into a single score. Stage 3b adds biological context from pathway databases. Stages 4 and 5 then use the accumulated evidence to assign confidence and resolve ambiguity. A compound that survives all stages with high confidence has been validated by mass accuracy, co-elution, isotope pattern, correlation network membership, and (optionally) pathway co-occurrence — multiple independent lines of evidence converging on the same identification.
 
@@ -629,8 +631,8 @@ Each feature in the final output receives a `MatchCategory` label:
 | 3b | `Stage3_custom_pathways.txt` | Pathway-enriched scores (custom mode) |
 | 3b | `Stage3_pathway_skipped.txt` | Scores without pathway enrichment (skip mode) |
 | 4a | `Stage4a_confidence_levels.txt` | All rows with confidence levels (audit trail) |
-| 4b | `Stage4b_confidence_levels.txt` | Coherent rows only (production output) |
-| 5 | `Stage5_curated_results.txt` | Final curated results after redundancy filtering |
+| 4b | `Stage4b_confidence_levels.txt` | **Canonical final output** — coherent rows with confidence values backed by full evidence |
+| 5 | `Stage5_curated_results.txt` | Opt-in (`redundancy_filtering = TRUE`) — one row per `(mz, time)`, with losing-compound rows deleted |
 
 All files are tab-delimited text. Columns vary by stage but always include: mz, time/rt, compound_id, Adduct, score (from Stage 3 onward), Confidence and Confidence_Level (from Stage 4 onward).
 
@@ -691,7 +693,7 @@ Before diving into the full parameter reference table, use the sections below to
 | `pathway_data` | NULL | 3b | Custom pathway table (required if `pathway_mode = "custom"`) |
 | `excluded_pathways` | NULL | 3b | Pathway IDs to exclude from enrichment analysis |
 | `excluded_pathway_compounds` | NULL | 3b | Compound IDs to exclude from pathway analysis |
-| `redundancy_filtering` | TRUE | 5 | Enable/disable Stage 5 multi-match resolution |
+| `redundancy_filtering` | FALSE | 5 | Opt-in Stage 5 multi-match resolution (writes `Stage5_curated_results.txt`). Off by default; Stage 4b is the canonical final output |
 | `boosted_compounds` | NULL | 4 | User-verified compound IDs (elevated to Confidence 4) |
 | `boost_match_by` | c("mz", "rt") | 4 | How to match boosted compounds: by mz, rt, or both |
 | `boost_mass_tolerance` | NULL (→ `mass_tolerance`) | 4 | Mass tolerance for boost matching |
@@ -739,6 +741,6 @@ Before diving into the full parameter reference table, use the sections below to
 
 ---
 
-**Symptom:** `Stage5_curated_results.txt` has far fewer rows than `Stage4b_confidence_levels.txt`.
-**Likely cause:** This is expected behavior when many features match multiple compounds. Stage 5 resolves each multi-match feature to a single winner, dropping the competing annotations. The `MatchCategory` column in the Stage 5 output distinguishes features that were unique matches from those that had competition.
-**Fix:** No fix needed — this is the pipeline working as intended. To see what was dropped, compare `Stage4b_confidence_levels.txt` against `Stage5_curated_results.txt`. Features marked `MatchCategory = "Multiple"` in Stage 5 had competing annotations that were resolved in favor of the retained compound.
+**Symptom:** `Stage5_curated_results.txt` has far fewer rows than `Stage4b_confidence_levels.txt` (only present when `redundancy_filtering = TRUE`).
+**Likely cause:** Stage 5 deletes losing-compound rows at every multi-match `(mz, time)` to leave a single row per peak. The `MatchCategory` column distinguishes features that were unique matches from those that had competition. Stage 4b retains the full set of competing annotations — use Stage 4b as the basis for any analysis that depends on confidence-level evidence integrity.
+**Fix:** No fix needed if you opted in to Stage 5 deliberately. To see what was dropped, diff `Stage4b_confidence_levels.txt` against `Stage5_curated_results.txt`. If the deletion was unintended, set `redundancy_filtering = FALSE` (the default).

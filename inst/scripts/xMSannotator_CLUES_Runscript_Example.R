@@ -195,7 +195,7 @@ network_type      <- "unsigned"
 # Annotation quality parameters
 MplusH_abundance_ratio_check  <- TRUE
 multimer_abundance_check      <- FALSE
-redundancy_filtering          <- TRUE
+redundancy_filtering          <- FALSE  # Stage 4b is the canonical final output; set TRUE to also write Stage 5 (one row per (mz, time), destructive on multi-match evidence)
 min_ions_per_chemical         <- 2
 level1_primary_adducts       <- c("M+H", "M-H")  # adducts that qualify for Conf 1 as a single match
 

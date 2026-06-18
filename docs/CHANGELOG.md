@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+### Changed
+- Flipped `redundancy_filtering` default in `advanced_annotation()` from `TRUE` to `FALSE`. `Stage4b_confidence_levels.txt` is now the canonical final output of the pipeline; `Stage5_curated_results.txt` is written only when the flag is set explicitly. Rationale: Stage 5 dedups on `(mz, time)` and **deletes** every losing-compound row at each multi-match feature, including the secondary adduct and isotope rows that contributed to other compounds' Confidence ≥ 2 assignments. This orphans the evidence, and the losing compound's other rows at different `(mz, time)` are not re-evaluated — they continue to display the confidence value that was computed when the now-deleted rows existed. Stage 4b retains every coherent row with the full evidence basis intact. Stage 5 algorithm itself is unchanged and remains available opt-in. Migration: scripts that read `Stage5_curated_results.txt` and want the prior behavior should set `redundancy_filtering = TRUE` explicitly. The shipped example runscripts (`inst/scripts/xMSannotator_CLUES_Runscript_Example.R`, `inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R`) were updated to default `FALSE` and their Section 8 read-the-output branches already handle both modes. (2026-06-10)
+
 ### Added
 - Added `docs/Stage5_Output_Reference.md` documenting all 19 columns in `Stage5_curated_results.txt` with definitions, data types, column origins, internal-to-output name mapping, and interpretation guides for Confidence and score. (2026-03-14)
 
