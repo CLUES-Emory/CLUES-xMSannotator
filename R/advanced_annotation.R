@@ -168,11 +168,42 @@ advanced_annotation <- function(peak_table,
                                 boost_time_tolerance = NULL,
                                 identify_isotopologues_flag = TRUE,
                                 level1_primary_adducts = c("M+H", "M-H"),
+                                charge_type = NULL,
                                 outloc = tempdir(),
                                 n_workers = parallel::detectCores()) {
+  if (!is.null(charge_type) && !charge_type %in% c("pos", "neg")) {
+    stop("charge_type must be one of: 'pos', 'neg'")
+  }
+
+  # Drop compounds of the opposite polarity before the adduct table is derived
+  # from them below: filtering later would remove the compounds but still create
+  # their bare-ion rows and adduct weights.
+  n_compounds_in <- nrow(compound_table)
+  compound_table <- filter_compounds_by_polarity(compound_table, charge_type)
+  if (!is.null(charge_type) && nrow(compound_table) < n_compounds_in) {
+    cat(sprintf(
+      "charge_type = '%s': dropped %d compounds of opposite charge sign (%d remain)\n",
+      charge_type, n_compounds_in - nrow(compound_table), nrow(compound_table)
+    ))
+  }
+
   if (is.null(adduct_table)) {
     adduct_table <- sample_adduct_table
   }
+
+  # Permanently charged compounds are matched as their bare ion. The rows must
+  # exist before adduct_weights is derived below and before Stages 3-5, which
+  # all inner-merge on adduct name and would otherwise drop those annotations.
+  adduct_table <- add_bare_ion_adducts(adduct_table, compound_table)
+  bare_ions <- adduct_table$adduct[startsWith(adduct_table$adduct, "[M]")]
+
+  # A bare ion is the only adduct its compound can ever carry, so unless it
+  # counts as a primary ion those compounds are capped at Confidence 0 by
+  # cap_confidence_with_evidence(). Safe for neutral compounds: both vectors are
+  # tested against each compound's own adducts, and a neutral compound can never
+  # be matched under a "[M]" name.
+  filter_by <- union(filter_by, bare_ions)
+  level1_primary_adducts <- union(level1_primary_adducts, bare_ions)
 
   if (is.null(adduct_weights)) {
     adduct_weights <- as.data.frame(tibble(adduct = adduct_table$adduct, weight = rep_len(5, length(adduct_table$adduct))))
@@ -363,7 +394,8 @@ advanced_annotation <- function(peak_table,
     mass_defect_tolerance = mass_defect_tolerance,
     peak_table = peak_table,
     rt_tolerance = time_tolerance,
-    isotope_mass_tolerance_ppm = isotope_mass_tolerance_ppm
+    isotope_mass_tolerance_ppm = isotope_mass_tolerance_ppm,
+    adduct_table = adduct_table
   )
   # ----------------------------
 

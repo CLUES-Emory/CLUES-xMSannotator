@@ -75,7 +75,12 @@ compute_isotopic_pattern <- function(formula, minAbund = 0.001) {
 #'  from their actual abundance ratio.
 #' @param peaks A peak table containing a peak identifier (unique number), mean intensity, module, and rt cluster
 #'  of each identified peak.
-#' @param mass_defect_tolerance A number. Maximum difference in mass defect between two peaks of the same compound.
+#' @param mass_defect_tolerance A number, in Da. How far the charge-corrected
+#'  spacing between an isotope candidate and its monoisotopic peak may sit from
+#'  a whole isotope step. This is a cheap prefilter; mass accuracy is enforced by
+#'  `isotope_mass_tolerance_ppm`, which should be set when calling directly.
+#'  (Previously this was compared against binned mass-defect indices, which was
+#'  charge-blind and discarded any isotope falling in a neighbouring bin.)
 #' @param rt_tolerance A number. Maximum rt difference for two peaks of the same substance.
 #'
 #' @return A table of identified isotopes with an extra column: `mass_number_difference`.
@@ -88,9 +93,13 @@ filter_isotopes <- function(query,
                             peaks,
                             mass_defect_tolerance,
                             rt_tolerance) {
+  # Spacing is on the m/z scale, so it must be multiplied by the ion's charge to
+  # recover whole isotope steps: at z = 2 the M+1 peak is 0.5017 m/z away and
+  # M+2 is 1.0034 away, which would otherwise both round to 1.
+  charge <- if (!is.null(query$charge) && !is.na(query$charge)) query$charge else 1
   isotopes <- mutate(
     peaks,
-    mass_number_difference = round(mz - query$expected_mass),
+    mass_number_difference = round((mz - query$expected_mass) * charge),
     compound = query$compound,
     compound_id = if ("compound_id" %in% names(query)) query$compound_id else NA_character_,
     adduct = query$adduct,
@@ -103,7 +112,12 @@ filter_isotopes <- function(query,
     peak != query$peak,
     rt_cluster == query$rt_cluster,
     near(rt, query$rt, rt_tolerance),
-    near(mass_defect, query$mass_defect, mass_defect_tolerance)
+    # Require the charge-deconvoluted spacing to sit within
+    # mass_defect_tolerance Da of a whole isotope step. This replaces a
+    # comparison of the binned `mass_defect` column, which was charge-blind and
+    # rejected any isotope whose m/z happened to fall in the neighbouring bin.
+    abs((mz - query$expected_mass) * charge - mass_number_difference) <=
+      mass_defect_tolerance
   )
 }
 
@@ -135,9 +149,11 @@ match_isotopes_by_intensity <- function(query,
     by = "mass_number_difference"
   )
 
-  # Calculate expected isotope mass
+  # Calculate expected isotope mass. exact_mass_diff is a difference between
+  # neutral masses, so on the m/z scale it is divided by the ion's charge.
+  charge <- if (!is.null(query$charge) && !is.na(query$charge)) query$charge else 1
   isotopes <- mutate(isotopes,
-    expected_mass = query$expected_mass + exact_mass_diff,
+    expected_mass = query$expected_mass + exact_mass_diff / charge,
     mass_error_ppm = abs(mz - expected_mass) / expected_mass * 1e6
   )
 
@@ -163,7 +179,12 @@ match_isotopes_by_intensity <- function(query,
 #'  from their actual abundance ratio.
 #' @param peaks A peak table containing a peak identifier (unique number), mean intensity, module, and rt cluster
 #'  of each identified peak.
-#' @param mass_defect_tolerance A number. Maximum difference in mass defect between two peaks of the same compound.
+#' @param mass_defect_tolerance A number, in Da. How far the charge-corrected
+#'  spacing between an isotope candidate and its monoisotopic peak may sit from
+#'  a whole isotope step. This is a cheap prefilter; mass accuracy is enforced by
+#'  `isotope_mass_tolerance_ppm`, which should be set when calling directly.
+#'  (Previously this was compared against binned mass-defect indices, which was
+#'  charge-blind and discarded any isotope falling in a neighbouring bin.)
 #' @param rt_tolerance A number. Maximum rt difference for two peaks of the same substance.
 #' @param isotope_mass_tolerance_ppm Maximum allowed mass error in ppm between observed and theoretical isotope m/z.
 #'  If NULL, no ppm filter is applied.
@@ -210,12 +231,21 @@ detect_isotopic_peaks <- function(...,
 #' @param adduct_weights A weight-by-adduct table.
 #' @param intensity_deviation_tolerance A numeric threshold by which an intensity ratio of two isotopic peaks may differ
 #'  from their actual abundance ratio. (Cl35 1.0 and Cl37 0.95 -> absolute abundances are about 0.45 and 0.42)
-#' @param mass_defect_tolerance A number. Maximum difference in mass defect between two peaks of the same compound.
+#' @param mass_defect_tolerance A number, in Da. How far the charge-corrected
+#'  spacing between an isotope candidate and its monoisotopic peak may sit from
+#'  a whole isotope step. This is a cheap prefilter; mass accuracy is enforced by
+#'  `isotope_mass_tolerance_ppm`, which should be set when calling directly.
+#'  (Previously this was compared against binned mass-defect indices, which was
+#'  charge-blind and discarded any isotope falling in a neighbouring bin.)
 #' @param peak_table A peak table containing a peak identifier (unique number), mean intensity, module, and rt cluster
 #'  of each identified peak.
 #' @param rt_tolerance A number. Maximum rt difference for two peaks of the same substance.
 #' @param isotope_mass_tolerance_ppm Maximum allowed mass error in ppm between observed and theoretical isotope m/z.
 #'  If NULL, no ppm filter is applied. Recommended: 5-10 ppm for high-resolution MS data.
+#' @param adduct_table Adduct table supplying the charge of each adduct, used to
+#'  place isotope peaks at the correct m/z spacing for multiply charged ions
+#'  (M+2H, bare ions of permanently charged compounds). If NULL, all ions are
+#'  assumed singly charged.
 #'
 #' @return Annotation table expanded by annotated isotopic peaks.
 #'
@@ -227,9 +257,24 @@ compute_isotopes <- function(annotation,
                              mass_defect_tolerance = 0,
                              peak_table,
                              rt_tolerance = 1,
-                             isotope_mass_tolerance_ppm = NULL) {
+                             isotope_mass_tolerance_ppm = NULL,
+                             adduct_table = NULL) {
   annotation <- mutate(annotation, mass_number_difference = 0)
   adducts <- semi_join(annotation, adduct_weights, by = "adduct")
+
+  # Isotope spacing on the m/z scale depends on the charge of the ion, which
+  # comes from the adduct (M+2H, the bare ion of a dication, ...). Absent an
+  # adduct table every ion is treated as singly charged, as before.
+  if (!is.null(adduct_table)) {
+    adducts <- left_join(
+      adducts,
+      distinct(select(adduct_table, "adduct", "charge")),
+      by = "adduct"
+    )
+    adducts$charge[is.na(adducts$charge)] <- 1L
+  } else {
+    adducts$charge <- 1L
+  }
 
   # This can be parallelized on `group_split(group_by(isotopes, molecular_formula))`
   isotopes <- purrr::pmap_dfr(

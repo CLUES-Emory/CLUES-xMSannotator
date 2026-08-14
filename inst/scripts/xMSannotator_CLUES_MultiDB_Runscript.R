@@ -186,7 +186,14 @@ if (!all(expected_cols %in% colnames(compound_table))) {
   colnames(compound_table)[1:4] <- expected_cols
 }
 
-cat(sprintf("Compound database: %d compounds\n", nrow(compound_table)))
+# If the database carries a `charge` column, keep only compounds observable in
+# this polarity: neutrals plus permanent ions of the matching sign. Done here so
+# the adduct weights built below do not cover the opposite polarity's bare ions.
+# No-op for a database without a `charge` column.
+compound_table <- filter_compounds_by_polarity(compound_table, charge_type)
+
+cat(sprintf("Compound database: %d compounds (%s mode)\n",
+            nrow(compound_table), charge_type))
 
 # Load metadata file for post-processing
 db_metafile_path <- file.path(db_base_dir, db_ls[[ii, "Meta_File"]])
@@ -202,9 +209,12 @@ names(db_metafile)[names(db_metafile) == "Formula_ID"] <- "compound_id"
 # Load the package's built-in adduct table
 adduct_table <- get_default_adduct_table()
 
-# Select adducts based on ionization mode
+# Select adducts based on ionization mode.
+# "M" is deliberately absent: it is a zero mass shift, i.e. the neutral mass,
+# which is not an observable species. Permanently charged compounds are handled
+# separately through the bare-ion pseudo-adducts below.
 if (charge_type == "pos") {
-  selected_adducts <- c("M", "M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
+  selected_adducts <- c("M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
   filter_by <- "M+H"
 } else {
   selected_adducts <- c("M-H", "M-H2O-H", "M+Na-2H", "M+Cl", "M+Hac-H", "2M-H")
@@ -213,6 +223,12 @@ if (charge_type == "pos") {
 
 # Filter adduct table to selected adducts
 adduct_table <- adduct_table[adduct_table$adduct %in% selected_adducts, ]
+
+# If the compound database carries a `charge` column, advanced_annotation() adds
+# one bare-ion pseudo-adduct per distinct non-zero charge ("[M]+", "[M]+2", ...)
+# so those compounds are searched at monoisotopic_mass / |z|. Add the same rows
+# here so the weights built below cover them; the call is a no-op otherwise.
+adduct_table <- add_bare_ion_adducts(adduct_table, compound_table)
 
 # Build adduct weights from filtered table
 adduct_weights <- data.frame(
@@ -236,7 +252,10 @@ correlation_threshold <- 0.7
 maximum_isotopes           <- 8
 mass_defect_precision      <- 0.01
 isotope_mass_tolerance     <- 7.5e-6  # defaults to mass_tolerance
-mass_defect_tolerance      <- 5
+mass_defect_tolerance      <- 0.02    # Da: how far the charge-corrected spacing may
+                                      # sit from a whole isotope step. A cheap prefilter;
+                                      # isotope_mass_tolerance does the real work.
+                                      # Values >= 0.5 disable the check entirely.
 intensity_deviation_tolerance <- 0.3
 identify_isotopologues_flag   <- TRUE   # use enviPat to label isotopologues (13C, 15N, etc.)
 
@@ -318,6 +337,7 @@ system.time(
     redundancy_filtering          = redundancy_filtering,
     identify_isotopologues_flag   = identify_isotopologues_flag,
     level1_primary_adducts        = level1_primary_adducts,
+    charge_type                   = charge_type,
     pathway_mode                  = pathway_mode,
     pathway_data                  = pathway_data,
     excluded_pathways             = excluded_pathways,

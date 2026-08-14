@@ -8,6 +8,10 @@
 #' @return Data frame with columns: mass_number_diff, neutral_mass, relative_abundance, isotopologue_label.
 #' @keywords internal
 get_isotopologue_labels <- function(formula, isotopes_data) {
+  # enviPat only parses pure elemental formulas: it tolerates a bare trailing
+  # sign but fails on a sign+digit suffix such as "C12H14N2+2". Matches what
+  # compute_isotopic_pattern() already does.
+  formula <- strip_formula_charge(formula)
   ep_result <- suppressMessages(enviPat::isopattern(
     isotopes_data, formula,
     threshold = 0.01,

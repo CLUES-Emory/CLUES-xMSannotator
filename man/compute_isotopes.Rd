@@ -11,7 +11,8 @@ compute_isotopes(
   mass_defect_tolerance = 0,
   peak_table,
   rt_tolerance = 1,
-  isotope_mass_tolerance_ppm = NULL
+  isotope_mass_tolerance_ppm = NULL,
+  adduct_table = NULL
 )
 }
 \arguments{
@@ -22,7 +23,12 @@ compute_isotopes(
 \item{intensity_deviation_tolerance}{A numeric threshold by which an intensity ratio of two isotopic peaks may differ
 from their actual abundance ratio. (Cl35 1.0 and Cl37 0.95 -> absolute abundances are about 0.45 and 0.42)}
 
-\item{mass_defect_tolerance}{A number. Maximum difference in mass defect between two peaks of the same compound.}
+\item{mass_defect_tolerance}{A number, in Da. How far the charge-corrected
+spacing between an isotope candidate and its monoisotopic peak may sit from
+a whole isotope step. This is a cheap prefilter; mass accuracy is enforced by
+\code{isotope_mass_tolerance_ppm}, which should be set when calling directly.
+(Previously this was compared against binned mass-defect indices, which was
+charge-blind and discarded any isotope falling in a neighbouring bin.)}
 
 \item{peak_table}{A peak table containing a peak identifier (unique number), mean intensity, module, and rt cluster
 of each identified peak.}
@@ -31,6 +37,11 @@ of each identified peak.}
 
 \item{isotope_mass_tolerance_ppm}{Maximum allowed mass error in ppm between observed and theoretical isotope m/z.
 If NULL, no ppm filter is applied. Recommended: 5-10 ppm for high-resolution MS data.}
+
+\item{adduct_table}{Adduct table supplying the charge of each adduct, used to
+place isotope peaks at the correct m/z spacing for multiply charged ions
+(M+2H, bare ions of permanently charged compounds). If NULL, all ions are
+assumed singly charged.}
 }
 \value{
 Annotation table expanded by annotated isotopic peaks.

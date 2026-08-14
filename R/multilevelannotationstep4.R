@@ -766,7 +766,14 @@ multilevelannotationstep4 <- function(outloc,
     mass = 0,
     stringsAsFactors = FALSE
   )
-  adduct_table_local <- rbind(adduct_table, adduct_monoisot)
+  # Only append when absent: the shipped table already contains "M", and a
+  # duplicate silently doubles every "M" row in the merge below, corrupting the
+  # nrow(curdata) rules in apply_unique_adduct_rules and min_ions_perchem.
+  if (!is.element("M", adduct_table$adduct)) {
+    adduct_table_local <- rbind(adduct_table, adduct_monoisot)
+  } else {
+    adduct_table_local <- adduct_table
+  }
   adduct_table_local <- adduct_table_local[order(adduct_table_local$adduct), ]
 
   # PERFORMANCE: Pre-split data by compound_id (avoids O(N*M) filtering)

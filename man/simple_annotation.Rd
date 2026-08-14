@@ -15,7 +15,11 @@ simple_annotation(
 \item{peak_table}{Data frame with columns: peak, mz, rt.}
 
 \item{compound_table}{Data frame with columns: monoisotopic_mass,
-molecular_formula, compound (or compound_id), name.}
+molecular_formula, compound (or compound_id), name. May also carry an
+integer \code{charge} column (default 0). Compounds with a non-zero charge are
+matched only as their bare ion at \verb{monoisotopic_mass / |charge|}, under a
+\verb{[M]+}-style pseudo-adduct added automatically; neutral compounds are
+matched across the supplied adducts but never at their neutral mass.}
 
 \item{adduct_table}{Data frame with columns: adduct, charge, factor, mass.
 If NULL, the package default adduct table is used.}

@@ -61,6 +61,118 @@ as_adduct_table <- function(data) {
   return(data)
 }
 
+#' Name of the bare-ion pseudo-adduct for a formal charge.
+#'
+#' A permanently charged compound (e.g. a quaternary ammonium herbicide) is
+#' already an ion and is observed at mass / |z| with no ionization adduct.
+#' Names are "[M]" plus the sign, plus the magnitude when |z| > 1, so e.g.
+#' 1 -> "[M]+", 2 -> "[M]+2", -5 -> "[M]-5". Returns NA for a neutral compound.
+#'
+#' The "[M]" prefix keeps these names clear of every pattern the pipeline
+#' matches on adduct names: the isotope suffix `_[+1]`, the `_.*` strip in
+#' multilevelannotationstep3, and the `[2-3]+M` multimer test in step 4.
+#'
+#' @param charge Integer vector of formal charges.
+#' @return Character vector of pseudo-adduct names, NA where charge is 0.
+#' @keywords internal
+bare_ion_adduct <- function(charge) {
+  ifelse(
+    charge == 0,
+    NA_character_,
+    paste0(
+      "[M]",
+      ifelse(charge > 0, "+", "-"),
+      ifelse(abs(charge) > 1, abs(charge), "")
+    )
+  )
+}
+
+#' Add the bare-ion pseudo-adducts required by permanently charged compounds.
+#'
+#' Appends one row per distinct non-zero compound charge, with
+#' \code{mass = 0}, \code{factor = 1} and \code{charge = |z|}, so that
+#' \code{match_by_mass} computes \code{monoisotopic_mass / |z|}. No-op for a
+#' neutral-only database or a compound table without a \code{charge} column,
+#' and idempotent.
+#'
+#' \code{advanced_annotation()} and \code{simple_annotation()} call this
+#' automatically. Call it directly only when building an \code{adduct_weights}
+#' table by hand, so the weights cover the bare-ion rows as well.
+#'
+#' @param adduct_table Adduct table to extend.
+#' @param compound_table Compound table, optionally carrying \code{charge}.
+#' @return The adduct table, with any missing bare-ion rows appended.
+#' @export
+add_bare_ion_adducts <- function(adduct_table, compound_table) {
+  if (!is.element("charge", colnames(compound_table))) {
+    return(adduct_table)
+  }
+
+  # Coerced here because this runs before as_compound_table() in the advanced
+  # pipeline, so the column may still be double or character (e.g. "+2").
+  charges <- suppressWarnings(as.integer(unique(compound_table$charge)))
+  charges <- charges[!is.na(charges) & charges != 0]
+  if (length(charges) == 0) {
+    return(adduct_table)
+  }
+
+  rows <- data.frame(
+    adduct = bare_ion_adduct(charges),
+    charge = as.integer(abs(charges)),
+    factor = 1L,
+    mass = 0,
+    stringsAsFactors = FALSE
+  )
+  rows <- rows[!is.element(rows$adduct, adduct_table$adduct), , drop = FALSE]
+  if (nrow(rows) == 0) {
+    return(adduct_table)
+  }
+
+  rbind(as.data.frame(adduct_table), rows)
+}
+
+#' Restrict a compound table to one ionization polarity.
+#'
+#' A permanently charged compound is observed only in the polarity matching its
+#' own charge sign: a quaternary ammonium cation cannot be seen in negative
+#' mode. Neutral compounds ionize in both and are always kept.
+#'
+#' With \code{charge_type = NULL} the table is returned unchanged, which is the
+#' behaviour of every caller written before this argument existed. A table
+#' carrying both signs then warns, because a single-polarity run would otherwise
+#' silently search m/z values its instrument cannot produce.
+#'
+#' No-op for a compound table without a \code{charge} column, and idempotent.
+#'
+#' @param compound_table Compound table, optionally carrying \code{charge}.
+#' @param charge_type \code{"pos"}, \code{"neg"}, or NULL for no filtering.
+#' @return The compound table, keeping only compounds observable in that polarity.
+#' @export
+filter_compounds_by_polarity <- function(compound_table, charge_type = NULL) {
+  if (!is.element("charge", colnames(compound_table))) {
+    return(compound_table)
+  }
+
+  # Coerced because this runs before as_compound_table() in the advanced
+  # pipeline, so the column may still be double or character (e.g. "+2").
+  charge <- suppressWarnings(as.integer(compound_table$charge))
+  charge[is.na(charge)] <- 0L
+
+  if (is.null(charge_type)) {
+    if (any(charge > 0) && any(charge < 0)) {
+      warning(
+        "compound_table contains both positively and negatively charged ",
+        "compounds and charge_type was not supplied, so both polarities will ",
+        "be searched. Set charge_type = 'pos' or 'neg' for a single-polarity run."
+      )
+    }
+    return(compound_table)
+  }
+
+  keep <- if (charge_type == "pos") charge >= 0 else charge <= 0
+  compound_table[keep, , drop = FALSE]
+}
+
 #' Select columns from compound table and ensure data types.
 #' @param data Compound database. Can contain either:
 #'   - `compound_id` (character): User-defined compound identifiers (e.g., "HMDB0000001")
@@ -70,6 +182,11 @@ as_adduct_table <- function(data) {
 #'   provided but `compound` is missing or invalid, an integer `compound` column
 #'   is auto-generated. If only `compound` is provided, `compound_id` is created
 #'   as `"Formula_<compound>"`.
+#'
+#'   May also carry `charge` (integer): the compound's permanent formal charge.
+#'   Defaults to 0 when absent. A non-zero charge means `monoisotopic_mass` is
+#'   the electron-corrected ion mass and the compound is matched only as its
+#'   bare ion (see [bare_ion_adduct()]), never across ionization adducts.
 #' @return Compound table with required columns and expected types.
 #' @import dplyr
 as_compound_table <- function(data) {
@@ -100,12 +217,24 @@ as_compound_table <- function(data) {
     data$compound_id <- paste0("Formula_", data$compound)
   }
 
+  # Optional formal charge. Non-zero means the compound is already an ion and is
+  # matched only as its bare ion; absent or NA means neutral.
+  if (!is.element("charge", colnames(data))) {
+    data$charge <- 0L
+  } else {
+    stopifnot(is.numeric(data$charge))
+    data$charge <- as.integer(data$charge)
+    data$charge[is.na(data$charge)] <- 0L
+  }
+  required <- c(required, "charge")
+
   data <- select(data, all_of(required))
 
   stopifnot(is.numeric(data$compound))
   stopifnot(is.numeric(data$monoisotopic_mass))
   stopifnot(is.character(data$molecular_formula))
   stopifnot(is.character(data$name))
+  stopifnot(is.integer(data$charge))
 
   return(data)
 }

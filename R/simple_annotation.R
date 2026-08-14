@@ -43,6 +43,29 @@ forms_valid_adduct_pair <- function(molecular_formula, adduct_formula) {
   !is_water_adducts | has_oxygen
 }
 
+#' Is this compound allowed to be observed as this adduct, given its charge?
+#'
+#' A permanently charged compound is already an ion: it is observed as the bare
+#' ion at mass / |z| and never picks up H+, Na+ or forms multimers, so it is
+#' restricted to its own bare-ion pseudo-adduct. A neutral compound is the
+#' converse: it can form any ionization adduct but is never observed at its
+#' neutral mass, so every zero-mass-shift adduct is excluded, including the
+#' stock "M". Excluding "M" for charged compounds also avoids reporting one hit
+#' twice, since "M" and "[M]+" give an identical expected mass at z = 1.
+#'
+#' @param compound_charge Integer vector of compound formal charges.
+#' @param adduct Character vector of adduct names, same length.
+#' @return Logical vector: TRUE for pairs that may be matched.
+#' @keywords internal
+forms_valid_charge_pair <- function(compound_charge, adduct) {
+  is_bare_ion <- startsWith(adduct, "[M]") | adduct == "M"
+  ifelse(
+    compound_charge == 0,
+    !is_bare_ion,
+    adduct == bare_ion_adduct(compound_charge)
+  )
+}
+
 #' @import dplyr
 #' @importFrom rlang .data
 compute_multiple_matches <- function(annotation) {
@@ -60,7 +83,11 @@ compute_multiple_matches <- function(annotation) {
 #'
 #' @param peak_table Data frame with columns: peak, mz, rt.
 #' @param compound_table Data frame with columns: monoisotopic_mass,
-#'   molecular_formula, compound (or compound_id), name.
+#'   molecular_formula, compound (or compound_id), name. May also carry an
+#'   integer `charge` column (default 0). Compounds with a non-zero charge are
+#'   matched only as their bare ion at `monoisotopic_mass / |charge|`, under a
+#'   `[M]+`-style pseudo-adduct added automatically; neutral compounds are
+#'   matched across the supplied adducts but never at their neutral mass.
 #' @param adduct_table Data frame with columns: adduct, charge, factor, mass.
 #'   If NULL, the package default adduct table is used.
 #' @param mass_tolerance Mass tolerance as a fraction (e.g., 5e-6 for 5 ppm).
@@ -77,6 +104,7 @@ simple_annotation <- function(peak_table, compound_table, adduct_table = NULL, m
   peak_table <- as_peak_table(peak_table)
   adduct_table <- as_adduct_table(adduct_table)
   compound_table <- as_compound_table(compound_table)
+  adduct_table <- add_bare_ion_adducts(adduct_table, compound_table)
 
   annotation <- match_by_mass(peak_table, adduct_table, compound_table, mass_tolerance)
   annotation <- left_join(annotation, peak_table, by = "peak")
@@ -84,6 +112,11 @@ simple_annotation <- function(peak_table, compound_table, adduct_table = NULL, m
 
   annotation <- filter(annotation, check_golden_rules(.data$molecular_formula))
   annotation <- filter(annotation, forms_valid_adduct_pair(.data$molecular_formula, .data$adduct))
+  annotation <- filter(annotation, forms_valid_charge_pair(.data$charge, .data$adduct))
+  # charge is an input constraint, not a result: dropping it keeps the output
+  # contract stable and avoids colliding with the adduct table's own `charge`
+  # in the downstream merges in get_chemscore and multilevelannotationstep4.
+  annotation <- select(annotation, -any_of("charge"))
   annotation <- compute_multiple_matches(annotation)
 
   return(annotation)
