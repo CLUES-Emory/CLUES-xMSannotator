@@ -202,7 +202,14 @@ advanced_annotation <- function(peak_table,
   # cap_confidence_with_evidence(). Safe for neutral compounds: both vectors are
   # tested against each compound's own adducts, and a neutral compound can never
   # be matched under a "[M]" name.
-  filter_by <- union(filter_by, bare_ions)
+  #
+  # Only extend filter_by when it is already active. An empty filter_by means
+  # "no primary-ion filter", and turning it into a bare-ion-only filter would
+  # flip filter_is_active for every compound in the run, capping isotope-backed
+  # evidence at Confidence 2 instead of 3.
+  if (!is_filter_empty(filter_by) && length(bare_ions) > 0) {
+    filter_by <- union(filter_by, bare_ions)
+  }
   level1_primary_adducts <- union(level1_primary_adducts, bare_ions)
 
   if (is.null(adduct_weights)) {

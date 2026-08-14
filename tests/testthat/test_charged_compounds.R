@@ -353,3 +353,18 @@ test_that("the opposite polarity is absent from a filtered annotation", {
   expect_true("neutral twin" %in% result$name)
   expect_false(any(startsWith(result$adduct, "[M]-")))
 })
+
+test_that("an empty filter_by is not activated by the bare-ion names", {
+  # filter_by = NULL means "no primary-ion filter". Extending it with the
+  # bare-ion names would flip filter_is_active for the whole run and cap
+  # isotope-backed evidence at Confidence 2 instead of 3.
+  bare <- c("[M]+", "[M]+2")
+
+  extend <- function(filter_by) {
+    if (!is_filter_empty(filter_by) && length(bare) > 0) union(filter_by, bare) else filter_by
+  }
+
+  expect_true(is_filter_empty(extend(NULL)))
+  expect_true(is_filter_empty(extend(NA_character_)))
+  expect_equal(extend(c("M+H", "M-H")), c("M+H", "M-H", bare))
+})
