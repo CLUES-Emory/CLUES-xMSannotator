@@ -685,7 +685,7 @@ The `advanced_annotation()` function accepts the following parameters:
 | `min_cluster_size` | integer | `10` | Minimum peaks per module in WGCNA clustering |
 | `maximum_isotopes` | integer | `10` | Maximum isotope peaks to consider per compound |
 | `min_ions_per_chemical` | integer | `2` | Minimum ions required to annotate a chemical |
-| `filter_by` | character vector | `c("M-H", "M+H")` | Primary adducts for confidence scoring |
+| `filter_by` | character vector | `c("M-H", "M+H")` | Primary adducts for confidence scoring. **Setting this activates a stricter confidence regime** — see below. `NULL` disables it. |
 | `level1_primary_adducts` | character vector | `c("M+H", "M-H")` | Adducts that qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`. |
 | `charge_type` | character | `NULL` | `"pos"` or `"neg"`. Drops compounds whose permanent `charge` has the opposite sign; neutrals are kept in both. `NULL` searches both polarities and warns if the database carries both signs. Does not affect adduct selection. |
 | `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
@@ -707,6 +707,31 @@ The `advanced_annotation()` function accepts the following parameters:
 - `10e-6` = 10 ppm
 - The matching algorithm uses: `|observed - expected| ≤ max(|observed|, |expected|) × tolerance`
 - Do NOT enter ppm values directly (e.g., do NOT use `5` for 5 ppm)
+
+### `filter_by` changes what a confidence level means
+
+`filter_by` names the primary ion(s). Whether it is set at all — not just which
+adducts it names — switches the confidence rules, via `filter_is_active` in
+`multilevelannotationstep4.R`:
+
+| | `filter_by = "M+H"` (active) | `filter_by = NULL` (inactive) |
+|---|---|---|
+| compound carrying no `M+H` | capped at Confidence 1 | no restriction |
+| isotope evidence + one adduct | promotes to Confidence 2 | promotes to **Confidence 3** |
+| isotope evidence + ≥2 adducts | promotes to Confidence 2 | promotes to **Confidence 3** |
+
+The effect is large. On the CLU0122 C18pos dataset, with everything else held
+constant, this one parameter moved Level 3 from 40 compounds to 136.
+
+Neither setting is right in general. Naming a primary ion is the conservative
+choice: it demands the canonical protonated or deprotonated form before awarding
+high confidence. `NULL` is permissive: any adduct with isotope support can reach
+Level 3. **Record which you used — results from the two settings are not
+comparable**, and a change here will look like a change in data quality.
+
+Note that `filter_by` is extended with the bare-ion names only when it is already
+active. Passing `NULL` keeps the permissive regime; it is not silently converted
+into a bare-ion-only filter.
 
 ### Example Usage
 

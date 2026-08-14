@@ -213,6 +213,15 @@ adduct_table <- get_default_adduct_table()
 # "M" is deliberately absent: it is a zero mass shift, i.e. the neutral mass,
 # which is not an observable species. Permanently charged compounds are handled
 # separately through the bare-ion pseudo-adducts below.
+#
+# `filter_by` names the "primary ion(s)" and is the single most consequential
+# parameter here. Setting it ACTIVATES a stricter confidence regime
+# (`filter_is_active` in multilevelannotationstep4): a compound carrying no M+H
+# is capped at Confidence 1, and isotope evidence promotes only to Confidence 2.
+# With filter_by = NULL there is no primary-ion requirement and isotope evidence
+# promotes all the way to Confidence 3. On one real dataset that difference alone
+# moved Level 3 from 40 compounds to 136. Choose deliberately and record it;
+# results are not comparable across the two settings.
 if (charge_type == "pos") {
   selected_adducts <- c("M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
   filter_by <- "M+H"

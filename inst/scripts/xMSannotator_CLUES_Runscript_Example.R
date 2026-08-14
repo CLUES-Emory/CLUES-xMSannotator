@@ -171,6 +171,21 @@ adduct_table <- get_default_adduct_table()
 # "M" is deliberately absent: it is a zero mass shift, i.e. the neutral mass,
 # which is not an observable species. Permanently charged compounds are handled
 # separately through the bare-ion pseudo-adducts below.
+#
+# `filter_by` is the single most consequential parameter in this script, and its
+# effect is not obvious. It names the "primary ion(s)". Setting it ACTIVATES a
+# stricter confidence regime (`filter_is_active` in multilevelannotationstep4):
+#
+#   filter_by = "M+H"  a compound carrying no M+H is capped at Confidence 1, and
+#                      isotope evidence promotes only to Confidence 2.
+#   filter_by = NULL   no primary-ion requirement; isotope evidence promotes all
+#                      the way to Confidence 3.
+#
+# On one real dataset this alone moved Level 3 from 40 compounds to 136. Neither
+# setting is "correct": "M+H" is conservative and demands the canonical ion, NULL
+# is permissive and lets any adduct plus isotope support reach Level 3. Choose
+# deliberately, and record which you used — results are not comparable across the
+# two. Set it to NULL in both branches to reproduce the permissive behaviour.
 if (charge_type == "pos") {
   selected_adducts <- c("M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
   filter_by <- "M+H"
@@ -228,8 +243,14 @@ network_type      <- "unsigned"
 MplusH_abundance_ratio_check  <- TRUE
 multimer_abundance_check      <- FALSE
 redundancy_filtering          <- FALSE  # Stage 4b is the canonical final output; set TRUE to also write Stage 5 (one row per (mz, time), destructive on multi-match evidence)
-min_ions_per_chemical         <- 2
+min_ions_per_chemical         <- 2      # 1 accepts single-peak compounds; with 2, a
+                                        # compound seen as one peak with no isotope
+                                        # can only reach Confidence 1 via the rescue
+                                        # branch in cap_confidence_with_evidence()
 level1_primary_adducts       <- c("M+H", "M-H")  # adducts that qualify for Conf 1 as a single match
+                                        # The bare-ion names ("[M]+", ...) are appended
+                                        # automatically when the database has a `charge`
+                                        # column, so permanent ions are not capped at 0.
 
 # Pathway settings
 pathway_mode                <- "skip"   # "skip", "HMDB", or "custom"
