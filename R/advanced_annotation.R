@@ -175,6 +175,9 @@ advanced_annotation <- function(peak_table,
                                 identify_isotopologues_flag = TRUE,
                                 level1_primary_adducts = c("M+H", "M-H"),
                                 charge_type = NULL,
+                                # RNG seed pinning peak-module clustering; NULL
+                                # leaves the caller's random stream untouched.
+                                clustering_seed = 12345,
                                 outloc = tempdir(),
                                 n_workers = parallel::detectCores()) {
   if (!is.null(charge_type) && !charge_type %in% c("pos", "neg")) {
@@ -359,7 +362,8 @@ advanced_annotation <- function(peak_table,
     correlation_threshold = correlation_threshold,
     deep_split = deep_split,
     min_cluster_size = min_cluster_size,
-    network_type = network_type
+    network_type = network_type,
+    seed = clustering_seed
   )
   # ----------------------------
 

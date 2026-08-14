@@ -38,6 +38,7 @@ advanced_annotation(
   identify_isotopologues_flag = TRUE,
   level1_primary_adducts = c("M+H", "M-H"),
   charge_type = NULL,
+  clustering_seed = 12345,
   outloc = tempdir(),
   n_workers = parallel::detectCores()
 )
