@@ -214,20 +214,25 @@ adduct_table <- get_default_adduct_table()
 # which is not an observable species. Permanently charged compounds are handled
 # separately through the bare-ion pseudo-adducts below.
 #
+# *** CHANGED 2026-08-14: filter_by is now NULL (was "M+H" / "M-H"). ***
+#
 # `filter_by` names the "primary ion(s)" and is the single most consequential
 # parameter here. Setting it ACTIVATES a stricter confidence regime
 # (`filter_is_active` in multilevelannotationstep4): a compound carrying no M+H
 # is capped at Confidence 1, and isotope evidence promotes only to Confidence 2.
 # With filter_by = NULL there is no primary-ion requirement and isotope evidence
-# promotes all the way to Confidence 3. On one real dataset that difference alone
-# moved Level 3 from 40 compounds to 136. Choose deliberately and record it;
-# results are not comparable across the two settings.
+# promotes all the way to Confidence 3. On the CLU0122 C18pos dataset that
+# difference alone moved Level 3 from 40 compounds to 136.
+#
+# Results from the two settings are NOT comparable — re-run anything annotated
+# under the previous setting before comparing. To restore the conservative
+# behaviour, set filter_by back to "M+H" / "M-H" below.
 if (charge_type == "pos") {
   selected_adducts <- c("M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
-  filter_by <- "M+H"
+  filter_by <- NULL
 } else {
   selected_adducts <- c("M-H", "M-H2O-H", "M+Na-2H", "M+Cl", "M+Hac-H", "2M-H")
-  filter_by <- "M-H"
+  filter_by <- NULL
 }
 
 # Filter adduct table to selected adducts

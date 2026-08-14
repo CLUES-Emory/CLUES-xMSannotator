@@ -24,7 +24,7 @@ advanced_annotation(
   min_cluster_size = 10,
   maximum_isotopes = 10,
   min_ions_per_chemical = 2,
-  filter_by = c("M-H", "M+H"),
+  filter_by = NULL,
   network_type = "unsigned",
   redundancy_filtering = FALSE,
   pathway_mode = "HMDB",

@@ -685,7 +685,7 @@ The `advanced_annotation()` function accepts the following parameters:
 | `min_cluster_size` | integer | `10` | Minimum peaks per module in WGCNA clustering |
 | `maximum_isotopes` | integer | `10` | Maximum isotope peaks to consider per compound |
 | `min_ions_per_chemical` | integer | `2` | Minimum ions required to annotate a chemical |
-| `filter_by` | character vector | `c("M-H", "M+H")` | Primary adducts for confidence scoring. **Setting this activates a stricter confidence regime** — see below. `NULL` disables it. |
+| `filter_by` | character vector | `NULL` | Primary adducts for confidence scoring. **Default changed from `c("M-H", "M+H")` to `NULL` on 2026-08-14** — naming a primary ion activates a stricter confidence regime, see below. |
 | `level1_primary_adducts` | character vector | `c("M+H", "M-H")` | Adducts that qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`. |
 | `charge_type` | character | `NULL` | `"pos"` or `"neg"`. Drops compounds whose permanent `charge` has the opposite sign; neutrals are kept in both. `NULL` searches both polarities and warns if the database carries both signs. Does not affect adduct selection. |
 | `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
@@ -709,6 +709,12 @@ The `advanced_annotation()` function accepts the following parameters:
 - Do NOT enter ppm values directly (e.g., do NOT use `5` for 5 ppm)
 
 ### `filter_by` changes what a confidence level means
+
+> **Default changed 2026-08-14: `filter_by` is now `NULL`, previously
+> `c("M-H", "M+H")`.** Both runscripts were changed to match. This makes the
+> permissive regime the default: isotope evidence can now reach Confidence 3.
+> **Anything annotated before this date used the stricter regime and must be
+> re-run before its confidence levels are compared against new output.**
 
 `filter_by` names the primary ion(s). Whether it is set at all — not just which
 adducts it names — switches the confidence rules, via `filter_is_active` in

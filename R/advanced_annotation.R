@@ -155,7 +155,13 @@ advanced_annotation <- function(peak_table,
                                 min_cluster_size = 10,
                                 maximum_isotopes = 10,
                                 min_ions_per_chemical = 2,
-                                filter_by = c("M-H", "M+H"),
+                                # Default changed to NULL (was c("M-H", "M+H")).
+                                # Naming a primary ion activates a stricter
+                                # confidence regime: a compound lacking it caps at
+                                # Confidence 1 and isotope evidence promotes only
+                                # to 2. NULL removes that requirement, so isotope
+                                # evidence can reach Confidence 3.
+                                filter_by = NULL,
                                 network_type = "unsigned",
                                 redundancy_filtering = FALSE,
                                 pathway_mode = "HMDB",

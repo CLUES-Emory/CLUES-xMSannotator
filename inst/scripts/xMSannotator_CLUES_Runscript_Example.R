@@ -172,6 +172,8 @@ adduct_table <- get_default_adduct_table()
 # which is not an observable species. Permanently charged compounds are handled
 # separately through the bare-ion pseudo-adducts below.
 #
+# *** CHANGED 2026-08-14: filter_by is now NULL (was "M+H" / "M-H"). ***
+#
 # `filter_by` is the single most consequential parameter in this script, and its
 # effect is not obvious. It names the "primary ion(s)". Setting it ACTIVATES a
 # stricter confidence regime (`filter_is_active` in multilevelannotationstep4):
@@ -179,19 +181,24 @@ adduct_table <- get_default_adduct_table()
 #   filter_by = "M+H"  a compound carrying no M+H is capped at Confidence 1, and
 #                      isotope evidence promotes only to Confidence 2.
 #   filter_by = NULL   no primary-ion requirement; isotope evidence promotes all
-#                      the way to Confidence 3.
+#                      the way to Confidence 3.  <-- current setting
 #
-# On one real dataset this alone moved Level 3 from 40 compounds to 136. Neither
-# setting is "correct": "M+H" is conservative and demands the canonical ion, NULL
-# is permissive and lets any adduct plus isotope support reach Level 3. Choose
-# deliberately, and record which you used — results are not comparable across the
-# two. Set it to NULL in both branches to reproduce the permissive behaviour.
+# On the CLU0122 C18pos dataset, with everything else held constant, this alone
+# moved Level 3 from 40 compounds to 136. NULL is the permissive choice: any
+# adduct with isotope support can reach Level 3, rather than only compounds
+# showing the canonical protonated/deprotonated ion.
+#
+# Results from the two settings are NOT comparable. Anything annotated with the
+# previous "M+H"/"M-H" setting must be re-run before it is compared against
+# output from this script, or the difference will read as a change in data
+# quality. To restore the conservative behaviour, set filter_by back to "M+H"
+# in the positive branch and "M-H" in the negative one.
 if (charge_type == "pos") {
   selected_adducts <- c("M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
-  filter_by <- "M+H"
+  filter_by <- NULL
 } else {
   selected_adducts <- c("M-H", "M-H2O-H", "M+Na-2H", "M+Cl", "M+Hac-H", "2M-H")
-  filter_by <- "M-H"
+  filter_by <- NULL
 }
 
 # Filter adduct table to selected adducts
