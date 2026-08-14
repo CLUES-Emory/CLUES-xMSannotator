@@ -37,7 +37,8 @@ lc_mode     <- paste0(lc_column, charge_type)  # e.g., "C18pos"
 # Feature table (tab-delimited .txt with mz, time/rt, and intensity columns)
 feature_table_path <- "path/to/feature_table.txt"
 
-# Compound database (.xlsx with compound_id, name, molecular_formula, monoisotopic_mass)
+# Compound database (.xlsx or delimited text) with compound_id, name,
+# molecular_formula, monoisotopic_mass, and optionally an integer `charge`
 compound_db_path <- "path/to/compound_database.xlsx"
 
 # Sample mapfile (tab-delimited .txt; set to NULL if not available)
@@ -129,7 +130,18 @@ cat(sprintf("Peak table: %d features x %d samples\n", nrow(peak_table), length(s
 # Section 4: Load Compound Database
 # =============================================================================
 
-compound_table <- read_xlsx(compound_db_path)
+# Accepts .xlsx/.xls, or any delimited text (.tsv/.txt are tab-delimited, .csv comma)
+read_compound_db <- function(path) {
+  ext <- tolower(tools::file_ext(path))
+  if (ext %in% c("xlsx", "xls")) {
+    as.data.frame(read_xlsx(path))
+  } else {
+    data.table::fread(path, data.table = FALSE,
+                      sep = if (ext == "csv") "," else "\t")
+  }
+}
+
+compound_table <- read_compound_db(compound_db_path)
 
 # Ensure expected column names
 expected_cols <- c("compound_id", "name", "molecular_formula", "monoisotopic_mass")
@@ -306,22 +318,33 @@ results <- read.table(results_file, sep = "\t", header = TRUE)
 
 # Join with compound metadata if a metafile is provided
 if (!is.null(db_metafile_path)) {
-  db_metafile <- read_xlsx(db_metafile_path)
+  db_metafile <- read_compound_db(db_metafile_path)
   names(db_metafile)[names(db_metafile) == "Formula_ID"] <- "compound_id"
   results <- left_join(results, db_metafile, by = "compound_id")
 }
 
-# Merge feature table QA metadata
-metadata_cols <- c("feature_id", "n_detected", "n_filled", "peak_quality",
-                   "alignment_score", "combined_score", "quality_category",
-                   "peak_shape", "passed_filter", "Water_fc",
-                   "Overall_detect_pct", "Study_Sample_detect_pct")
-# Also include any _CV columns (names vary by study, e.g., HRE.p1Std._CV, Study_Sample_CV)
-cv_cols <- grep("_CV$", colnames(feature_table), value = TRUE, ignore.case = TRUE)
-metadata_cols <- unique(c(metadata_cols, cv_cols))
-feature_metadata <- feature_table[, intersect(metadata_cols, colnames(feature_table))]
-feature_metadata <- unique(feature_metadata)
-results <- left_join(results, feature_metadata, by = "feature_id")
+# Merge feature table QA metadata, keyed on whatever the feature ID column is
+# called. Skipped when there is no ID column, or when none of the QA columns
+# below exist in this feature table.
+if (!is.null(feature_id_column) &&
+      feature_id_column %in% colnames(results) &&
+      feature_id_column %in% colnames(feature_table)) {
+  metadata_cols <- c(feature_id_column, "n_detected", "n_filled", "peak_quality",
+                     "alignment_score", "combined_score", "quality_category",
+                     "peak_shape", "passed_filter", "Water_fc",
+                     "Overall_detect_pct", "Study_Sample_detect_pct",
+                     "Num_Detected", "Percent_Detected", "Blank_FC",
+                     "mz_range_ppm", "time_range_sec")
+  # Also include any CV columns (names vary by study, e.g. HRE.p1Std._CV, p1Std-CV%)
+  cv_cols <- grep("_CV$|CV%$", colnames(feature_table), value = TRUE, ignore.case = TRUE)
+  metadata_cols <- unique(c(metadata_cols, cv_cols))
+  feature_metadata <- feature_table[, intersect(metadata_cols, colnames(feature_table)),
+                                    drop = FALSE]
+  feature_metadata <- unique(feature_metadata)
+  if (ncol(feature_metadata) > 1) {
+    results <- left_join(results, feature_metadata, by = feature_id_column)
+  }
+}
 
 # Export to Excel
 output_name <- file.path(outloc, paste0(lc_mode, "-", study_id, "_Annotation.xlsx"))
