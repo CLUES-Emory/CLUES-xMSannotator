@@ -168,6 +168,15 @@ match_isotopes_by_intensity <- function(query,
     near(relative_intensity, abund, relative_intensity * intensity_deviation_tolerance)
   )
 
+  # Retain the ratio as a single derived column. `relative_intensity` (observed)
+  # and `abund` (theoretical, from enviPat) are both computed above and were
+  # previously discarded here, leaving only binary isotope presence downstream.
+  # Keeping the deviation lets later stages tell a close isotope match from a
+  # marginal one that merely passed intensity_deviation_tolerance.
+  isotopes <- mutate(isotopes,
+    isotope_ratio_dev = abs(relative_intensity - abund) / abund
+  )
+
   isotopes <- select(isotopes, -c(abund, relative_intensity, exact_mass_diff, mass_error_ppm))
 }
 

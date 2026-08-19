@@ -12,7 +12,8 @@ construct_adduct_formula <- function(formula, mass_number_difference) {
 #'@param annotation Annotation table after [compute_isotopes()] with columns
 #' ['mz', 'rt', 'rt_cluster', 'module', 'multiple_match', 'expected_mass',
 #' 'molecular_formula', 'adduct', 'mass_number_difference', 'monoisotopic_mass',
-#' 'mean_intensity', 'mass_defect', 'compound_id']
+#' 'mean_intensity', 'mass_defect', 'compound_id', and optionally
+#' 'isotope_ratio_dev']
 #' @return Reformatted annotation table for use with the `master` branch.
 #' @import dplyr
 #' @importFrom magrittr %>%
@@ -43,6 +44,13 @@ reformat_annotation_table <- function(annotation) {
 
   if ("peak" %in% names(annotation)) {
     master_annotation$peak <- annotation$peak
+  }
+
+  # Isotope ratio deviation, when compute_isotopes() supplied it. Guarded so
+  # callers passing tables from older versions are unaffected. NA on
+  # monoisotopic rows, as mass_number_difference already is.
+  if ("isotope_ratio_dev" %in% names(annotation)) {
+    master_annotation$isotope_ratio_dev <- annotation$isotope_ratio_dev
   }
 
   return(master_annotation)

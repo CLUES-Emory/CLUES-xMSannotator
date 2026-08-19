@@ -458,10 +458,18 @@ advanced_annotation <- function(peak_table,
 
   # Get unique compound_ids and process each once.
   # NOTE: distinct() only controls how many times get_chemscore is CALLED.
-  # Inside get_chemscore, it queries the FULL annotation table for all rows
-  # with that compound_id, so ALL adducts are preserved.
+  # get_chemscore() then re-queries the annotation table for that compound_id,
+  # but only within +/- max_diff_rt of this row's time (get_chemscore.R:36-40),
+  # so the row kept here decides which chromatographic peak can be annotated.
   unique_chemicals <- annotation %>%
     dplyr::distinct(compound_id, .keep_all = TRUE)
+
+  # Drop the isotope evidence before scoring, for the same reason `peak` is
+  # dropped above: chemscore_helpers.R:606 and :726 call na.omit() on the whole
+  # frame, and isotope_ratio_dev is NA on every monoisotopic row, so leaving it
+  # in deletes the entire scoring frame.
+  annotation$isotope_ratio_dev <- NULL
+  unique_chemicals$isotope_ratio_dev <- NULL
 
   annotation <- purrr::pmap_dfr(
     unique_chemicals,

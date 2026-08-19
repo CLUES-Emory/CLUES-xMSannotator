@@ -1,3 +1,18 @@
+# `isotope_ratio_dev` is a deliberate addition that postdates the stored
+# fixtures. Assert it on its own terms, then compare every other column against
+# the fixture unchanged -- regenerating the fixtures instead would hide any
+# unrelated drift they still guard against.
+expect_ratio_dev <- function(actual) {
+  expect_true("isotope_ratio_dev" %in% names(actual))
+  expect_type(actual$isotope_ratio_dev, "double")
+  observed <- actual$isotope_ratio_dev[!is.na(actual$isotope_ratio_dev)]
+  expect_true(all(observed >= 0))
+}
+
+drop_ratio_dev <- function(actual) {
+  actual[, setdiff(names(actual), "isotope_ratio_dev"), drop = FALSE]
+}
+
 test_that("Isotopes-computing: isotopes annotation.", {
   peak_table <- readRDS("test-data/isotopes_detection/peaks.rds")
   annotation <- readRDS("test-data/isotopes_detection/annotation.rds")
@@ -12,7 +27,8 @@ test_that("Isotopes-computing: isotopes annotation.", {
     mass_defect_tolerance = 0.1
   )
   expected <- readRDS("test-data/isotopes_detection/annotation_with_isp.rds")
-  expect_equal(actual, expected)
+  expect_ratio_dev(actual)
+  expect_equal(drop_ratio_dev(actual), expected)
 })
 
 test_that("isotopes near a mass-defect bin boundary are not discarded", {
@@ -50,7 +66,8 @@ patrick::with_parameters_test_that(
       mass_defect_tolerance = 0.1,
       query
     )
-    expect_equal(actual, expected, ignore_attr = TRUE)
+    expect_ratio_dev(actual)
+    expect_equal(drop_ratio_dev(actual), expected, ignore_attr = TRUE)
   },
   patrick::cases(
     isoproturon = list(
@@ -80,7 +97,8 @@ test_that("Isotopes-computing: isotope matching by intensity.", {
     pattern = pattern,
     intensity_deviation_tolerance = 0.4
   )
-  expect_equal(actual, expected)
+  expect_ratio_dev(actual)
+  expect_equal(drop_ratio_dev(actual), expected)
 })
 
 patrick::with_parameters_test_that(
@@ -104,3 +122,4 @@ patrick::with_parameters_test_that(
     )
   )
 )
+
