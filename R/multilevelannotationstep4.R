@@ -714,12 +714,17 @@ boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs,
   has_mz <- "mz" %in% cnames_boost
   has_time <- "time" %in% cnames_boost
 
+  # Under multi_rt_clusters the compound_id carries an "__rtN" suffix so that
+  # every step keyed on compound identity runs per cluster. Boost IDs come from
+  # the caller unqualified, so compare on the base id. No-op otherwise.
+  base_compound_id <- sub("__rt[0-9]+$", "", chemscoremat_with_confidence$compound_id)
+
   if (has_mz || has_time) {
     # Proximity-based matching
     good_ind <- sapply(seq_len(nrow(chemscoremat_with_confidence)), function(i) {
       ann_row <- chemscoremat_with_confidence[i, ]
 
-      id_match <- boostIDs$ID == ann_row$compound_id
+      id_match <- boostIDs$ID == base_compound_id[i]
       if (!any(id_match)) return(FALSE)
 
       if (has_mz) {
@@ -738,7 +743,7 @@ boost_confidence_of_IDs <- function(chemscoremat_with_confidence, boostIDs,
     good_idx <- which(good_ind)
   } else {
     # ID-only matching
-    good_idx <- which(chemscoremat_with_confidence$compound_id %in% boostIDs$ID)
+    good_idx <- which(base_compound_id %in% boostIDs$ID)
   }
 
   if (length(good_idx) > 0) {

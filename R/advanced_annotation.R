@@ -174,6 +174,15 @@ advanced_annotation <- function(peak_table,
                                 boost_time_tolerance = NULL,
                                 identify_isotopologues_flag = TRUE,
                                 level1_primary_adducts = c("M+H", "M-H"),
+                                # Report every retention-time cluster a compound
+                                # matches, rather than choosing one. Off by
+                                # default; the default path is unchanged.
+                                # Roughly doubles the output, almost entirely as
+                                # Confidence 0 rows, and each cluster carries its
+                                # own confidence. Note Stage 5 redundancy
+                                # filtering then sees several clusters per
+                                # compound; it is untested in that combination.
+                                multi_rt_clusters = FALSE,
                                 charge_type = NULL,
                                 # RNG seed pinning peak-module clustering; NULL
                                 # leaves the caller's random stream untouched.
@@ -456,13 +465,25 @@ advanced_annotation <- function(peak_table,
   # Strip peak before scoring (hardcoded column indices in helpers break with extra cols)
   annotation$peak <- NULL
 
-  # Get unique compound_ids and process each once.
-  # NOTE: distinct() only controls how many times get_chemscore is CALLED.
-  # get_chemscore() then re-queries the annotation table for that compound_id,
-  # but only within +/- max_diff_rt of this row's time (get_chemscore.R:36-40),
-  # so the row kept here decides which chromatographic peak can be annotated.
-  unique_chemicals <- annotation %>%
-    dplyr::distinct(compound_id, .keep_all = TRUE)
+  # Choose the query rows. These only control how many times get_chemscore() is
+  # CALLED; it then re-queries the annotation table for that compound_id, but
+  # only within +/- max_diff_rt of the query row's time (get_chemscore.R:36-40).
+  # So each query row decides which chromatographic peak can be annotated, and
+  # how many query rows a compound gets decides how many of its peaks can be.
+  if (isTRUE(multi_rt_clusters)) {
+    # One anchor per (compound, retention-time cluster). get_chemscore() already
+    # scores within +/- max_diff_rt of the anchor, so several anchors simply
+    # produce several independent score blocks for the same compound.
+    unique_chemicals <- select_cluster_anchors(
+      annotation,
+      level1_primary_adducts = level1_primary_adducts,
+      max_diff_rt = time_tolerance
+    )
+    unique_chemicals$rt_cluster <- NULL
+  } else {
+    unique_chemicals <- annotation %>%
+      dplyr::distinct(compound_id, .keep_all = TRUE)
+  }
 
   # Record how many candidate retention times each compound offered, before the
   # table is reduced to one row per compound. Joined onto the Stage 4 outputs at
@@ -493,6 +514,17 @@ advanced_annotation <- function(peak_table,
 
   # Restore peak column after scoring
   annotation <- restore_peak_column(annotation, peak_restore_map)
+
+  if (isTRUE(multi_rt_clusters)) {
+    # Anchors are more than max_diff_rt apart but their +/- max_diff_rt windows
+    # can still overlap, so a row may be scored twice. Keep the better score.
+    key <- paste(annotation$compound_id, annotation$Adduct,
+                 round(as.numeric(annotation$mz), 5),
+                 round(as.numeric(annotation$time), 3), sep = "|")
+    ord <- order(key, -as.numeric(annotation$cur_chem_score))
+    annotation <- annotation[ord, , drop = FALSE]
+    annotation <- annotation[!duplicated(key[ord]), , drop = FALSE]
+  }
   # ----------------------------
 
   # Output Stage3: Chemical score results
@@ -501,6 +533,14 @@ advanced_annotation <- function(peak_table,
   write.table(stage3_output, file = file.path(outloc, "Stage3_chemical_scores.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
+
+  if (isTRUE(multi_rt_clusters)) {
+    # Qualify compound_id with the cluster index. Every later step keyed on
+    # compound identity -- the Stage 4 split, enforce_compound_coherence(),
+    # cap_confidence_with_evidence() and boost_confidence_of_IDs() -- then
+    # operates per cluster with no change to those functions.
+    annotation <- qualify_rt_clusters(annotation, max_diff_rt = time_tolerance)
+  }
 
   # Tool 9: pathway matching
   # ----------------------------
@@ -612,7 +652,10 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage4a: Full confidence level results (all rows, including incoherent)
   # ----------------------------
+  # `annotation` stays cluster-qualified here so the coherence filter below runs
+  # per cluster; only the written copy is unqualified.
   stage4a_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
+  if (isTRUE(multi_rt_clusters)) stage4a_output <- unqualify_rt_clusters(stage4a_output)
   stage4a_output <- dplyr::left_join(stage4a_output, rt_cluster_counts, by = "compound_id")
   write.table(stage4a_output, file = file.path(outloc, "Stage4a_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
@@ -633,6 +676,12 @@ advanced_annotation <- function(peak_table,
     annotation$score, annotation$Adduct,
     decreasing = TRUE
   ), ]
+
+  if (isTRUE(multi_rt_clusters)) {
+    # The coherence filter has now run per cluster, so each retention-time
+    # cluster kept its own best module rather than the compound keeping one.
+    annotation <- unqualify_rt_clusters(annotation)
+  }
 
   # Output Stage4b: Coherent rows only (feeds Stage5)
   # ----------------------------

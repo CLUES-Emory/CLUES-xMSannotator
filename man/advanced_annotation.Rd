@@ -37,6 +37,7 @@ advanced_annotation(
   boost_time_tolerance = NULL,
   identify_isotopologues_flag = TRUE,
   level1_primary_adducts = c("M+H", "M-H"),
+  multi_rt_clusters = FALSE,
   charge_type = NULL,
   clustering_seed = 12345,
   outloc = tempdir(),

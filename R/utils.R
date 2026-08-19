@@ -446,3 +446,122 @@ count_rt_clusters <- function(annotation, max_diff_rt = 10) {
              n_rt_clusters = as.integer(counts),
              stringsAsFactors = FALSE)
 }
+
+#' Choose one query anchor per compound per retention-time cluster
+#'
+#' Used when `multi_rt_clusters = TRUE`. Instead of the default single query
+#' row per compound, this picks the best peak within each retention-time
+#' cluster, so a compound whose mass matches at three distinct retention times
+#' is scored three times and reported three times.
+#'
+#' Clusters are separated on adjacent gaps in retention time greater than
+#' `max_diff_rt`. Within a cluster, candidates are the monoisotopic rows and
+#' are ranked on co-located isotope support, then isotope-ratio fidelity, then
+#' primary adduct, then intensity, then `mz` and `time` so the result never
+#' depends on input row order.
+#'
+#' @param annotation Annotation table after [reformat_annotation_table()].
+#' @param level1_primary_adducts Adducts treated as primary evidence.
+#' @param max_diff_rt Retention time window in seconds.
+#' @return One row per (compound_id, cluster), with an added `rt_cluster` index.
+#' @export
+select_cluster_anchors <- function(annotation,
+                                   level1_primary_adducts = c("M+H", "M-H"),
+                                   max_diff_rt = 10) {
+  if (nrow(annotation) == 0) {
+    annotation$rt_cluster <- integer(0)
+    return(annotation)
+  }
+  isotope_pattern <- "_\\[(\\+|\\-)[0-9]+\\]"
+  is_isotope <- grepl(isotope_pattern, annotation$Adduct)
+  base_adduct <- sub(isotope_pattern, "", annotation$Adduct)
+  module <- gsub(as.character(annotation$Module_RTclust),
+                 pattern = "_[0-9]*", replacement = "")
+  rt <- as.numeric(annotation$time)
+  mz <- as.numeric(annotation$mz)
+  intensity <- as.numeric(annotation$mean_int_vec)
+  ratio_dev <- if ("isotope_ratio_dev" %in% names(annotation)) {
+    as.numeric(annotation$isotope_ratio_dev)
+  } else {
+    rep(NA_real_, nrow(annotation))
+  }
+
+  rows_by_compound <- split(seq_len(nrow(annotation)),
+                            as.character(annotation$compound_id))
+  picked <- integer(0)
+  cluster_of <- integer(0)
+
+  for (idx in rows_by_compound) {
+    ordered <- idx[order(rt[idx])]
+    cl <- cumsum(c(0, diff(rt[ordered])) > max_diff_rt) + 1L
+    for (k in unique(cl)) {
+      grp <- ordered[cl == k]
+      candidates <- grp[!is_isotope[grp]]
+      if (length(candidates) == 0) candidates <- grp
+      if (length(candidates) == 1) {
+        picked <- c(picked, candidates)
+        cluster_of <- c(cluster_of, k)
+        next
+      }
+      isotopes <- grp[is_isotope[grp]]
+      support <- integer(length(candidates))
+      fidelity <- rep(Inf, length(candidates))
+      for (j in seq_along(candidates)) {
+        i <- candidates[j]
+        co <- isotopes[module[isotopes] == module[i] &
+                         abs(rt[isotopes] - rt[i]) <= max_diff_rt]
+        support[j] <- length(co)
+        observed <- ratio_dev[co]
+        observed <- observed[!is.na(observed)]
+        if (length(observed) > 0) fidelity[j] <- min(observed)
+      }
+      primary <- as.integer(base_adduct[candidates] %in% level1_primary_adducts)
+      ranked <- order(-support, fidelity, -primary, -intensity[candidates],
+                      mz[candidates], rt[candidates])
+      picked <- c(picked, candidates[ranked[1]])
+      cluster_of <- c(cluster_of, k)
+    }
+  }
+  out <- annotation[picked, , drop = FALSE]
+  out$rt_cluster <- cluster_of
+  out
+}
+
+#' Qualify compound_id with a retention-time cluster index
+#'
+#' Appends `__rtN` to `compound_id` so that every downstream step keyed on
+#' compound identity -- the Stage 4 split, [enforce_compound_coherence()], and
+#' [cap_confidence_with_evidence()] -- operates per retention-time cluster
+#' instead of per compound, with no change to those functions.
+#'
+#' @param annotation Scored annotation table.
+#' @param max_diff_rt Retention time window in seconds.
+#' @return `annotation` with `compound_id` qualified.
+#' @export
+qualify_rt_clusters <- function(annotation, max_diff_rt = 10) {
+  if (nrow(annotation) == 0) return(annotation)
+  rt <- as.numeric(annotation$time)
+  cid <- as.character(annotation$compound_id)
+  out <- cid
+  for (idx in split(seq_len(nrow(annotation)), cid)) {
+    ordered <- idx[order(rt[idx])]
+    cl <- cumsum(c(0, diff(rt[ordered])) > max_diff_rt) + 1L
+    out[ordered] <- paste0(cid[ordered], "__rt", cl)
+  }
+  annotation$compound_id <- out
+  annotation
+}
+
+#' Split a cluster-qualified compound_id back into its parts
+#' @param annotation Table whose `compound_id` may carry an `__rtN` suffix.
+#' @return `annotation` with plain `compound_id` and an added `rt_cluster`.
+#' @export
+unqualify_rt_clusters <- function(annotation) {
+  if (nrow(annotation) == 0 || !any(grepl("__rt[0-9]+$", annotation$compound_id))) {
+    return(annotation)
+  }
+  cid <- as.character(annotation$compound_id)
+  annotation$rt_cluster <- as.integer(sub("^.*__rt", "", cid))
+  annotation$compound_id <- sub("__rt[0-9]+$", "", cid)
+  annotation
+}
