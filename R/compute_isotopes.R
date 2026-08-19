@@ -162,10 +162,20 @@ match_isotopes_by_intensity <- function(query,
     isotopes <- filter(isotopes, mass_error_ppm <= isotope_mass_tolerance_ppm)
   }
 
-  # Apply intensity ratio filter
+  # Apply intensity ratio filter.
+  #
+  # The half-width is a fraction of `abund` (theoretical), not of
+  # `relative_intensity` (observed). Scaling by the observed value made the
+  # window depend on the quantity being tested: it narrowed exactly when the
+  # observed ratio fell below theory -- the usual direction for a weakly
+  # measured M+2 -- and widened when it overshot. In observed/theoretical terms
+  # the old band was [0.769, 1.429], centred on 1.099 rather than 1.0, so it
+  # preferentially admitted isotopes reading stronger than theory (the
+  # signature of a co-eluting interference) while rejecting cleanly measured
+  # weak ones. The band is now symmetric: [1 - tol, 1 + tol].
   isotopes <- filter(
     isotopes,
-    near(relative_intensity, abund, relative_intensity * intensity_deviation_tolerance)
+    near(relative_intensity, abund, abund * intensity_deviation_tolerance)
   )
 
   # Retain the ratio as a single derived column. `relative_intensity` (observed)

@@ -51,8 +51,11 @@ test_that("isotopes near a mass-defect bin boundary are not discarded", {
     isotope_mass_tolerance_ppm = 5
   )
 
-  # 21 before the fix, 37 after
-  expect_equal(sum(actual$mass_number_difference != 0), 37)
+  # 21 before the mass-defect fix, 37 after. Now 43: the intensity band was
+  # made symmetric about the theoretical abundance, which admits isotopes
+  # reading weak (ratio 0.7-0.769 of theory) that the observed-scaled band
+  # rejected. Both fixes add real isotopes; neither relaxes the tolerance.
+  expect_equal(sum(actual$mass_number_difference != 0), 43)
 })
 
 patrick::with_parameters_test_that(
@@ -123,3 +126,51 @@ patrick::with_parameters_test_that(
   )
 )
 
+# --- intensity acceptance band ---
+# The tolerance is a fraction of the theoretical abundance, so the accepted
+# band is symmetric about it: [1 - tol, 1 + tol] in observed/theoretical terms.
+# Scaling by the observed ratio instead gave [1/(1+tol), 1/(1-tol)] =
+# [0.769, 1.429] at tol = 0.3 -- centred on 1.099, admitting isotopes reading
+# strong (interference) and rejecting cleanly measured weak ones.
+
+# accepts a pair whose observed/theoretical ratio is `ratio`
+accepted_at <- function(ratio, abund = 0.644, tol = 0.3) {
+  query <- tibble(mean_intensity = 1000, expected_mass = 160.9567)
+  pattern <- tibble(mass_number_difference = 2, abund = abund,
+                    exact_mass_diff = 1.99705)
+  isotopes <- tibble(
+    mz = query$expected_mass + pattern$exact_mass_diff,
+    mean_intensity = 1000 * abund * ratio,
+    mass_number_difference = 2
+  )
+  nrow(match_isotopes_by_intensity(query, isotopes, pattern, tol)) == 1
+}
+
+test_that("band is symmetric about the theoretical abundance", {
+  expect_true(accepted_at(1.00))
+  expect_true(accepted_at(0.75))
+  expect_true(accepted_at(1.25))
+  # edges
+  expect_true(accepted_at(0.71))
+  expect_true(accepted_at(1.29))
+  expect_false(accepted_at(0.69))
+  expect_false(accepted_at(1.31))
+})
+
+test_that("a weak but clean M+2 is accepted (was rejected by the observed-scaled band)", {
+  # 2,4-dichlorophenol, C18neg rt 123.4: observed 0.463 against 0.644 theory,
+  # i.e. ratio 0.719 -- inside [0.7, 1.3] but below the old 0.769 floor.
+  expect_true(accepted_at(0.719))
+})
+
+test_that("an M+2 reading far stronger than theory is rejected", {
+  # ratio 1.40 sat inside the old band, which stretched to 1.429
+  expect_false(accepted_at(1.40))
+})
+
+test_that("the band scales with the tolerance argument", {
+  expect_true(accepted_at(0.55, tol = 0.5))
+  expect_false(accepted_at(0.45, tol = 0.5))
+  expect_true(accepted_at(0.92, tol = 0.1))
+  expect_false(accepted_at(0.88, tol = 0.1))
+})
