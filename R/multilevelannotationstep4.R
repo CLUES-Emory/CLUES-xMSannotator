@@ -121,6 +121,50 @@ enforce_compound_coherence <- function(curdata) {
   curdata[modules == best_module, , drop = FALSE]
 }
 
+#' Partition one compound's annotations into module- and RT-coherent groups
+#'
+#' `enforce_compound_coherence()` resolves module conflicts but not retention-time
+#' conflicts, while [check_compound_coherence()] fails on either. A row in the same
+#' module but at a distant retention time therefore survives enforcement and then
+#' fails the coherence test, marking the whole compound incoherent. This splits a
+#' compound into groups that are coherent by both criteria, so evidence can be
+#' evaluated against the rows it is actually co-located with.
+#'
+#' Groups are formed per module, then greedily by retention time so that each
+#' group's span never exceeds `max.rt.diff` (a chain of small gaps cannot
+#' accumulate past the tolerance).
+#'
+#' @param curdata Data frame of annotations for one compound
+#' @param max.rt.diff Maximum RT difference threshold (seconds)
+#' @return Integer vector of group ids, one per row of `curdata`
+coherent_groups <- function(curdata, max.rt.diff) {
+  n <- nrow(curdata)
+  if (n <= 1) return(rep(1L, n))
+
+  modules <- gsub(as.character(curdata$Module_RTclust), pattern = "_[0-9]*", replacement = "")
+  times <- as.numeric(curdata$time)
+  group <- integer(n)
+  next_id <- 0L
+
+  for (m in unique(modules)) {
+    rows <- which(modules == m)
+    rows <- rows[order(times[rows])]
+    next_id <- next_id + 1L
+    group[rows[1]] <- next_id
+    anchor_time <- times[rows[1]]
+    if (length(rows) > 1) {
+      for (k in 2:length(rows)) {
+        if (times[rows[k]] - anchor_time > max.rt.diff) {
+          next_id <- next_id + 1L
+          anchor_time <- times[rows[k]]
+        }
+        group[rows[k]] <- next_id
+      }
+    }
+  }
+  group
+}
+
 #' Assign confidence based on standard criteria
 assign_conf <- function(curdata, filter.by, delta_rt, max_diff_rt, current_conf) {
   if (curdata$score[1] <= 0) {
@@ -950,8 +994,12 @@ upgrade_confidence_with_evidence <- function(annotation,
 #' Runs after Stage 4 and upgrade step to enforce evidence-based caps on
 #' confidence values. Unlike upgrade (which only raises), this function can
 #' lower confidence when evidence is insufficient. Skips Conf 0 and Conf 4
-#' (user-confirmed). Reuses enforce_compound_coherence() and
-#' check_compound_coherence() for module/RT evaluation.
+#' (user-confirmed).
+#'
+#' Each compound is split by [coherent_groups()] into groups that are coherent by
+#' module and retention time, and each group is judged on the evidence co-located
+#' with it. A compound observed at two distant retention times therefore gets two
+#' independent verdicts rather than one verdict applied to both.
 #'
 #' Evidence cap tiers:
 #' - 3 (High): isotope rows + 1+ base adducts, module + RT coherent
@@ -977,39 +1025,52 @@ cap_confidence_with_evidence <- function(annotation,
   if (length(candidates) == 0) return(annotation)
 
   for (cid in candidates) {
-    idx <- which(annotation$compound_id == cid)
-    curdata <- annotation[idx, , drop = FALSE]
-    curdata <- enforce_compound_coherence(curdata)
+    all_idx <- which(annotation$compound_id == cid)
+    all_data <- annotation[all_idx, , drop = FALSE]
+    groups <- coherent_groups(all_data, max.rt.diff)
 
-    adducts_raw <- curdata$Adduct
-    base_adducts <- strip_isotope_suffix(adducts_raw)
-    n_base_adducts <- length(unique(base_adducts))
+    # Evaluate each coherent group on its own evidence and cap only that group's
+    # rows. Previously the evidence was read from enforce_compound_coherence()'s
+    # single surviving module but written back to every row of the compound, so
+    # one RT-outlier row could demote a compound's well-supported rows.
+    for (g in unique(groups)) {
+      sel <- which(groups == g)
+      idx <- all_idx[sel]
+      curdata <- all_data[sel, , drop = FALSE]
 
-    isotope_pattern <- "(_\\[(\\+|\\-)[0-9]+\\])"
-    has_isotope <- grepl(isotope_pattern, adducts_raw)
-    n_isotope_rows <- sum(has_isotope)
-    n_base_rows <- sum(!has_isotope)
+      adducts_raw <- curdata$Adduct
+      base_adducts <- strip_isotope_suffix(adducts_raw)
+      n_base_adducts <- length(unique(base_adducts))
 
-    coherent <- check_compound_coherence(curdata, max.rt.diff)
+      isotope_pattern <- "(_\\[(\\+|\\-)[0-9]+\\])"
+      has_isotope <- grepl(isotope_pattern, adducts_raw)
+      n_isotope_rows <- sum(has_isotope)
+      n_base_rows <- sum(!has_isotope)
 
-    # Determine maximum justified confidence
-    if (coherent && n_isotope_rows > 0 && n_base_rows >= 1 && n_base_adducts >= 1) {
-      max_conf <- CONFIDENCE_HIGH       # 3: isotopes + actual base row
-    } else if (coherent && n_base_adducts >= 2) {
-      max_conf <- CONFIDENCE_MEDIUM     # 2: multiple adducts
-    } else if (n_base_rows >= 1 && any(base_adducts[!has_isotope] %in% level1_primary_adducts)) {
-      max_conf <- CONFIDENCE_LOW        # 1: single primary adduct (from actual base row)
-    } else {
-      max_conf <- CONFIDENCE_NONE       # 0: insufficient evidence
-    }
+      coherent <- check_compound_coherence(curdata, max.rt.diff)
 
-    current_conf <- annotation$Confidence[idx[1]]
-    if (current_conf > max_conf) {
-      # Cap down
-      annotation$Confidence[idx] <- max_conf
-    } else if (current_conf == CONFIDENCE_NONE && max_conf > CONFIDENCE_NONE) {
-      # Rescue: raise Level 0 to evidence-based level (capped at Level 1)
-      annotation$Confidence[idx] <- min(max_conf, CONFIDENCE_LOW)
+      # Determine maximum justified confidence
+      if (coherent && n_isotope_rows > 0 && n_base_rows >= 1 && n_base_adducts >= 1) {
+        max_conf <- CONFIDENCE_HIGH       # 3: isotopes + actual base row
+      } else if (coherent && n_base_adducts >= 2) {
+        max_conf <- CONFIDENCE_MEDIUM     # 2: multiple adducts
+      } else if (n_base_rows >= 1 && any(base_adducts[!has_isotope] %in% level1_primary_adducts)) {
+        max_conf <- CONFIDENCE_LOW        # 1: single primary adduct (from actual base row)
+      } else {
+        max_conf <- CONFIDENCE_NONE       # 0: insufficient evidence
+      }
+
+      # Rows of a compound share a Confidence coming out of Stage 4, so reading
+      # the group's first row is equivalent to reading any of them. What changes
+      # here is the write: each group gets its own verdict.
+      current_conf <- annotation$Confidence[idx[1]]
+      if (current_conf > max_conf) {
+        # Cap down
+        annotation$Confidence[idx] <- max_conf
+      } else if (current_conf == CONFIDENCE_NONE && max_conf > CONFIDENCE_NONE) {
+        # Rescue: raise Level 0 to evidence-based level (capped at Level 1)
+        annotation$Confidence[idx] <- min(max_conf, CONFIDENCE_LOW)
+      }
     }
   }
 
