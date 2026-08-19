@@ -10,7 +10,8 @@ reformat_annotation_table(annotation)
 \item{annotation}{Annotation table after \code{\link[=compute_isotopes]{compute_isotopes()}} with columns
 \link[='mz', 'rt', 'rt_cluster', 'module', 'multiple_match', 'expected_mass',
 'molecular_formula', 'adduct', 'mass_number_difference', 'monoisotopic_mass',
-'mean_intensity', 'mass_defect', 'compound_id']{'mz', 'rt', 'rt_cluster', 'module', 'multiple_match', 'expected_mass', 'molecular_formula', 'adduct', 'mass_number_difference', 'monoisotopic_mass', 'mean_intensity', 'mass_defect', 'compound_id'}}
+'mean_intensity', 'mass_defect', 'compound_id', and optionally
+'isotope_ratio_dev']{'mz', 'rt', 'rt_cluster', 'module', 'multiple_match', 'expected_mass', 'molecular_formula', 'adduct', 'mass_number_difference', 'monoisotopic_mass', 'mean_intensity', 'mass_defect', 'compound_id', and optionally 'isotope_ratio_dev'}}
 }
 \value{
 Reformatted annotation table for use with the \code{master} branch.
