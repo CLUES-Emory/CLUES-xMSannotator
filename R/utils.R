@@ -505,3 +505,41 @@ select_query_anchor <- function(annotation,
 
   annotation[chosen, , drop = FALSE]
 }
+
+#' Count the candidate retention-time clusters available for each compound
+#'
+#' [select_query_anchor()] keeps one peak per compound, so the annotation gives
+#' no sign of how many it chose between. That matters when reading the result: a
+#' compound whose mass matched a single retention time had no choice to exploit,
+#' while one matching a dozen had eleven chances for a flattering coincidence.
+#' Measured on CLU0009, the Confidence 3 rate rises from +0.2 points for
+#' single-candidate compounds to +40 points at eleven or more, and roughly a
+#' third of that gain is not explained by recovering the correct peak.
+#'
+#' Reporting the count lets a reader weight an annotation accordingly instead of
+#' treating every Confidence 3 alike.
+#'
+#' Clusters are counted on retention time alone -- peaks separated by more than
+#' `max_diff_rt` are distinct candidates, since that is the width of the window
+#' [get_chemscore()] scores within.
+#'
+#' @param annotation Annotation table with `compound_id` and `time` columns.
+#' @param max_diff_rt Retention time window in seconds.
+#' @return Data frame with `compound_id` and `n_rt_clusters`.
+#' @export
+count_rt_clusters <- function(annotation, max_diff_rt = 10) {
+  if (nrow(annotation) == 0) {
+    return(data.frame(compound_id = character(0), n_rt_clusters = integer(0),
+                      stringsAsFactors = FALSE))
+  }
+  counts <- tapply(as.numeric(annotation$time),
+                   as.character(annotation$compound_id),
+                   function(times) {
+                     times <- sort(unique(times))
+                     if (length(times) <= 1) return(1L)
+                     1L + sum(diff(times) > max_diff_rt)
+                   })
+  data.frame(compound_id = names(counts),
+             n_rt_clusters = as.integer(counts),
+             stringsAsFactors = FALSE)
+}

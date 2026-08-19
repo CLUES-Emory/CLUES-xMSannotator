@@ -473,6 +473,12 @@ advanced_annotation <- function(peak_table,
     max_diff_rt = time_tolerance
   )
 
+  # Record how many candidate retention times each compound offered, before the
+  # table is reduced to one row per compound. Joined onto the Stage 4 outputs at
+  # the end so a reader can tell an unambiguous match from the best of a dozen;
+  # it takes no part in scoring.
+  rt_cluster_counts <- count_rt_clusters(annotation, max_diff_rt = time_tolerance)
+
   annotation$isotope_ratio_dev <- NULL
   unique_chemicals$isotope_ratio_dev <- NULL
 
@@ -612,6 +618,7 @@ advanced_annotation <- function(peak_table,
   # Output Stage4a: Full confidence level results (all rows, including incoherent)
   # ----------------------------
   stage4a_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
+  stage4a_output <- dplyr::left_join(stage4a_output, rt_cluster_counts, by = "compound_id")
   write.table(stage4a_output, file = file.path(outloc, "Stage4a_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
@@ -635,6 +642,7 @@ advanced_annotation <- function(peak_table,
   # Output Stage4b: Coherent rows only (feeds Stage5)
   # ----------------------------
   stage4b_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
+  stage4b_output <- dplyr::left_join(stage4b_output, rt_cluster_counts, by = "compound_id")
   write.table(stage4b_output, file = file.path(outloc, "Stage4b_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
