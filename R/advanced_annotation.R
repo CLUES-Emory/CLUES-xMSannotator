@@ -456,22 +456,13 @@ advanced_annotation <- function(peak_table,
   # Strip peak before scoring (hardcoded column indices in helpers break with extra cols)
   annotation$peak <- NULL
 
-  # Retain the isotope evidence only long enough to choose each compound's query
-  # anchor, then drop it for the same reason `peak` is dropped above:
-  # chemscore_helpers.R:625 rebuilds the frame by position
-  # (`cbind(x[, 2:11], x[, 1], x[, 12:14])`), so any extra column changes which
-  # data lands in which name.
-  # Choose one representative peak per compound. Its `time` becomes the centre of
-  # the +/- max_diff_rt window that get_chemscore() scores within, so this choice
-  # decides which chromatographic peak a compound can be annotated to.
-  # distinct() decided it by row order, which traces back to the adduct-table
-  # order in match_by_mass.cpp; select_query_anchor() decides it on co-eluting
-  # isotope support and isotope-ratio fidelity instead.
-  unique_chemicals <- select_query_anchor(
-    annotation,
-    level1_primary_adducts = level1_primary_adducts,
-    max_diff_rt = time_tolerance
-  )
+  # Get unique compound_ids and process each once.
+  # NOTE: distinct() only controls how many times get_chemscore is CALLED.
+  # get_chemscore() then re-queries the annotation table for that compound_id,
+  # but only within +/- max_diff_rt of this row's time (get_chemscore.R:36-40),
+  # so the row kept here decides which chromatographic peak can be annotated.
+  unique_chemicals <- annotation %>%
+    dplyr::distinct(compound_id, .keep_all = TRUE)
 
   # Record how many candidate retention times each compound offered, before the
   # table is reduced to one row per compound. Joined onto the Stage 4 outputs at
@@ -479,6 +470,10 @@ advanced_annotation <- function(peak_table,
   # it takes no part in scoring.
   rt_cluster_counts <- count_rt_clusters(annotation, max_diff_rt = time_tolerance)
 
+  # Drop the isotope evidence before scoring, for the same reason `peak` is
+  # dropped above: chemscore_helpers.R:606 and :726 call na.omit() on the whole
+  # frame, and isotope_ratio_dev is NA on every monoisotopic row, so leaving it
+  # in deletes the entire scoring frame.
   annotation$isotope_ratio_dev <- NULL
   unique_chemicals$isotope_ratio_dev <- NULL
 

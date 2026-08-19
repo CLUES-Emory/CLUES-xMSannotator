@@ -15,7 +15,7 @@ count_rt_clusters(annotation, max_diff_rt = 10)
 Data frame with \code{compound_id} and \code{n_rt_clusters}.
 }
 \description{
-\code{\link[=select_query_anchor]{select_query_anchor()}} keeps one peak per compound, so the annotation gives
+\code{advanced_annotation()} keeps one peak per compound, so the annotation gives
 no sign of how many it chose between. That matters when reading the result: a
 compound whose mass matched a single retention time had no choice to exploit,
 while one matching a dozen had eleven chances for a flattering coincidence.
