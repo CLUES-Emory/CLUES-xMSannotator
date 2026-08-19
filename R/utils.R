@@ -408,3 +408,100 @@ as_pathway_table <- function(data) {
 
   return(data)
 }
+
+#' Choose one representative peak per compound, on evidence rather than row order
+#'
+#' `advanced_annotation()` scores each compound against a single query row, and
+#' that row's `time` becomes the centre of the +/- `max_diff_rt` window that
+#' [get_chemscore()] scores within. The choice therefore decides which
+#' chromatographic peak a compound can be annotated to.
+#'
+#' Previously the row was taken by `dplyr::distinct(compound_id, .keep_all =
+#' TRUE)`, i.e. whichever row happened to come first. Row order originates in
+#' `match_by_mass.cpp`, whose loop nesting is adduct index -> compound index ->
+#' peak index, so the anchor followed the order of the adduct table and
+#' reordering that table changed which peaks were annotated.
+#'
+#' Candidates are the monoisotopic rows, since [get_chemscore()] returns NULL
+#' when its window contains none. Each candidate is ranked on the evidence
+#' co-located with it -- same `compound_id`, same module prefix, and within
+#' `max_diff_rt` seconds:
+#'
+#' 1. isotope support: how many co-eluting isotope rows there are
+#' 2. ratio fidelity: the smallest `isotope_ratio_dev` among them
+#' 3. primary adduct: whether the base adduct is in `level1_primary_adducts`
+#' 4. abundance: `mean_int_vec`
+#' 5. `mz` then `time`, so the result never depends on input row order
+#'
+#' Criteria 1-2 are what make the choice evidence-based; criterion 5 is what
+#' makes it deterministic. Output rows are ordered by `compound_id` for the same
+#' reason.
+#'
+#' `isotope_ratio_dev` is read only from isotope-suffixed rows. Monoisotopic
+#' rows can carry a non-NA value -- [reformat_annotation_table()] leaves the
+#' adduct unsuffixed when `mass_number_difference` is 0 -- and such a value
+#' does not describe the row it sits on.
+#'
+#' @param annotation Annotation table after [reformat_annotation_table()], with
+#'   columns `compound_id`, `Adduct`, `time`, `mz`, `mean_int_vec`,
+#'   `Module_RTclust`, and optionally `isotope_ratio_dev`.
+#' @param level1_primary_adducts Adducts treated as primary evidence.
+#' @param max_diff_rt Retention time window in seconds, matching the window
+#'   [get_chemscore()] applies.
+#' @return One row per `compound_id`, ordered by `compound_id`.
+#' @export
+select_query_anchor <- function(annotation,
+                                level1_primary_adducts = c("M+H", "M-H"),
+                                max_diff_rt = 10) {
+  if (nrow(annotation) == 0) {
+    return(annotation)
+  }
+
+  isotope_pattern <- "_\\[(\\+|\\-)[0-9]+\\]"
+  is_isotope <- grepl(isotope_pattern, annotation$Adduct)
+  base_adduct <- sub(isotope_pattern, "", annotation$Adduct)
+  # same expression as check_compound_coherence(), so "co-located" means the
+  # same thing here as it does downstream
+  module <- gsub(as.character(annotation$Module_RTclust),
+                 pattern = "_[0-9]*", replacement = "")
+  rt <- as.numeric(annotation$time)
+  mz <- as.numeric(annotation$mz)
+  intensity <- as.numeric(annotation$mean_int_vec)
+  ratio_dev <- if ("isotope_ratio_dev" %in% names(annotation)) {
+    as.numeric(annotation$isotope_ratio_dev)
+  } else {
+    rep(NA_real_, nrow(annotation))
+  }
+
+  rows_by_compound <- split(seq_len(nrow(annotation)),
+                            as.character(annotation$compound_id))
+
+  chosen <- vapply(rows_by_compound, function(idx) {
+    candidates <- idx[!is_isotope[idx]]
+    # a compound with only isotope rows cannot be scored; keep one anyway so the
+    # caller still sees it, as distinct() did
+    if (length(candidates) == 0) candidates <- idx
+    if (length(candidates) == 1) return(candidates)
+
+    isotopes <- idx[is_isotope[idx]]
+    support <- integer(length(candidates))
+    fidelity <- rep(Inf, length(candidates))
+
+    for (k in seq_along(candidates)) {
+      i <- candidates[k]
+      co_eluting <- isotopes[module[isotopes] == module[i] &
+                               abs(rt[isotopes] - rt[i]) <= max_diff_rt]
+      support[k] <- length(co_eluting)
+      observed <- ratio_dev[co_eluting]
+      observed <- observed[!is.na(observed)]
+      if (length(observed) > 0) fidelity[k] <- min(observed)
+    }
+
+    primary <- as.integer(base_adduct[candidates] %in% level1_primary_adducts)
+    ranked <- order(-support, fidelity, -primary, -intensity[candidates],
+                    mz[candidates], rt[candidates])
+    candidates[ranked[1]]
+  }, integer(1))
+
+  annotation[chosen, , drop = FALSE]
+}
