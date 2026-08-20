@@ -438,13 +438,49 @@ count_rt_clusters <- function(annotation, max_diff_rt = 10) {
   counts <- tapply(as.numeric(annotation$time),
                    as.character(annotation$compound_id),
                    function(times) {
-                     times <- sort(unique(times))
-                     if (length(times) <= 1) return(1L)
-                     1L + sum(diff(times) > max_diff_rt)
+                     max(rt_cluster_index(unique(times), max_diff_rt))
                    })
   data.frame(compound_id = names(counts),
              n_rt_clusters = as.integer(counts),
              stringsAsFactors = FALSE)
+}
+
+#' Assign retention-time cluster indices, bounded by the tolerance
+#'
+#' Groups retention times so that **no cluster spans more than `max_diff_rt`**.
+#' Each time is compared against the cluster's anchor -- the earliest time in it
+#' -- rather than against its immediate predecessor, so a chain of small gaps
+#' cannot accumulate into an arbitrarily wide cluster.
+#'
+#' That bound is what makes a cluster representable by a single query row:
+#' [get_chemscore()] scores only within +/- `max_diff_rt` of the anchor's time,
+#' so a cluster wider than the tolerance would contain rows its own anchor can
+#' never reach, and those rows would be silently dropped before scoring.
+#'
+#' @param times Numeric retention times.
+#' @param max_diff_rt Maximum span of a cluster, in seconds.
+#' @return Integer cluster index per element of `times`, numbered by ascending time.
+#' @export
+rt_cluster_index <- function(times, max_diff_rt = 10) {
+  n <- length(times)
+  if (n == 0) return(integer(0))
+  times <- as.numeric(times)
+  o <- order(times)
+  out <- integer(n)
+  id <- 1L
+  anchor <- times[o[1]]
+  out[o[1]] <- id
+  if (n > 1) {
+    for (k in 2:n) {
+      i <- o[k]
+      if (times[i] - anchor > max_diff_rt) {
+        id <- id + 1L
+        anchor <- times[i]
+      }
+      out[i] <- id
+    }
+  }
+  out
 }
 
 #' Choose one query anchor per compound per retention-time cluster
@@ -454,8 +490,8 @@ count_rt_clusters <- function(annotation, max_diff_rt = 10) {
 #' cluster, so a compound whose mass matches at three distinct retention times
 #' is scored three times and reported three times.
 #'
-#' Clusters are separated on adjacent gaps in retention time greater than
-#' `max_diff_rt`. Within a cluster, candidates are the monoisotopic rows and
+#' Clusters come from [rt_cluster_index()], so none spans more than
+#' `max_diff_rt` and each is therefore reachable from its own anchor. Within a cluster, candidates are the monoisotopic rows and
 #' are ranked on co-located isotope support, then isotope-ratio fidelity, then
 #' primary adduct, then intensity, then `mz` and `time` so the result never
 #' depends on input row order.
@@ -493,7 +529,7 @@ select_cluster_anchors <- function(annotation,
 
   for (idx in rows_by_compound) {
     ordered <- idx[order(rt[idx])]
-    cl <- cumsum(c(0, diff(rt[ordered])) > max_diff_rt) + 1L
+    cl <- rt_cluster_index(rt[ordered], max_diff_rt)
     for (k in unique(cl)) {
       grp <- ordered[cl == k]
       candidates <- grp[!is_isotope[grp]]
@@ -545,7 +581,7 @@ qualify_rt_clusters <- function(annotation, max_diff_rt = 10) {
   out <- cid
   for (idx in split(seq_len(nrow(annotation)), cid)) {
     ordered <- idx[order(rt[idx])]
-    cl <- cumsum(c(0, diff(rt[ordered])) > max_diff_rt) + 1L
+    cl <- rt_cluster_index(rt[ordered], max_diff_rt)
     out[ordered] <- paste0(cid[ordered], "__rt", cl)
   }
   annotation$compound_id <- out

@@ -27,8 +27,8 @@ cluster, so a compound whose mass matches at three distinct retention times
 is scored three times and reported three times.
 }
 \details{
-Clusters are separated on adjacent gaps in retention time greater than
-\code{max_diff_rt}. Within a cluster, candidates are the monoisotopic rows and
+Clusters come from \code{\link[=rt_cluster_index]{rt_cluster_index()}}, so none spans more than
+\code{max_diff_rt} and each is therefore reachable from its own anchor. Within a cluster, candidates are the monoisotopic rows and
 are ranked on co-located isotope support, then isotope-ratio fidelity, then
 primary adduct, then intensity, then \code{mz} and \code{time} so the result never
 depends on input row order.

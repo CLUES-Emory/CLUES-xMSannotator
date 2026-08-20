@@ -1,11 +1,10 @@
 # Tests for count_rt_clusters()
 #
 # The count answers "how many candidate retention times did the anchor choose
-# between", so clusters are separated on adjacent gaps in retention time alone.
-# This is deliberately a different rule from coherent_groups(), which is module
-# aware and measures each row against a group anchor so a chain of small gaps
-# cannot accumulate past the tolerance. Here a chain of small gaps IS one
-# candidate: the peaks are contiguous in time, so there is nothing to choose.
+# between", and it uses the same bounded rule as the clustering that actually
+# scores them (rt_cluster_index): each time is compared against its cluster's
+# anchor, not its neighbour, so no cluster spans more than max_diff_rt. That
+# keeps n_rt_clusters equal to max(rt_cluster) in the output.
 
 ann <- function(compound_id, time) {
   data.frame(compound_id = compound_id, time = time, stringsAsFactors = FALSE)
@@ -59,10 +58,13 @@ test_that("the window argument is honoured", {
   expect_equal(count_rt_clusters(d, max_diff_rt = 50)$n_rt_clusters, 1L)
 })
 
-test_that("a chain of small gaps is one cluster", {
-  # contiguous peaks: no gap exceeds the window, so there is one candidate
+test_that("a chain of small gaps does NOT collapse into one cluster", {
+  # Each gap is 6 s, under the 10 s window, but the run spans 24 s. Counting it
+  # as one candidate would imply a single query row could represent all five
+  # peaks -- it cannot, since get_chemscore() only reaches +/- 10 s from its
+  # anchor. Bounded clustering splits it instead.
   out <- count_rt_clusters(ann(rep("A", 5), c(0, 6, 12, 18, 24)), max_diff_rt = 10)
-  expect_equal(out$n_rt_clusters, 1L)
+  expect_equal(out$n_rt_clusters, 3L)
 })
 
 test_that("empty annotation returns an empty frame with the right columns", {

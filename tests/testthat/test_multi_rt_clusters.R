@@ -111,3 +111,59 @@ test_that("a compound id containing rt-like text is not mangled", {
   expect_equal(u$compound_id, rep("ABCrt12DEF", 2))
   expect_equal(u$rt_cluster, c(1L, 2L))
 })
+
+# --- rt_cluster_index: the bound that makes a cluster representable ---
+
+test_that("no cluster spans more than max_diff_rt", {
+  set.seed(11)
+  for (i in 1:50) {
+    t <- sort(runif(20, 0, 300))
+    g <- rt_cluster_index(t, max_diff_rt = 10)
+    spans <- tapply(t, g, function(x) max(x) - min(x))
+    expect_true(all(spans <= 10))
+  }
+})
+
+test_that("a chain of sub-tolerance gaps is split, not chained", {
+  # gaps of 6 s each, total span 24 s: the old adjacent-gap rule made this one
+  # cluster, whose anchor could not reach both ends
+  t <- c(0, 6, 12, 18, 24)
+  g <- rt_cluster_index(t, max_diff_rt = 10)
+  expect_equal(length(unique(g)), 3)
+  expect_true(all(tapply(t, g, function(x) max(x) - min(x)) <= 10))
+})
+
+test_that("every row is reachable from its cluster's earliest member", {
+  t <- c(0, 4, 9, 13, 40, 44)
+  g <- rt_cluster_index(t, max_diff_rt = 10)
+  for (k in unique(g)) {
+    x <- t[g == k]
+    expect_true(all(abs(x - min(x)) <= 10))
+  }
+})
+
+test_that("indices are ordered by ascending time regardless of input order", {
+  t <- c(200, 5, 100, 10)
+  g <- rt_cluster_index(t, max_diff_rt = 10)
+  expect_equal(g[order(t)], sort(g[order(t)]))
+  expect_equal(g, c(3L, 1L, 2L, 1L))
+})
+
+test_that("edge cases", {
+  expect_equal(rt_cluster_index(numeric(0), 10), integer(0))
+  expect_equal(rt_cluster_index(42, 10), 1L)
+  expect_equal(rt_cluster_index(c(5, 5, 5), 10), c(1L, 1L, 1L))
+})
+
+test_that("select_cluster_anchors produces one anchor that covers its cluster", {
+  ann <- make_rows("A", rep("M-H", 5), c(0, 6, 12, 18, 24),
+                   rep(100, 5), c(5, 5, 5, 5, 5))
+  out <- select_cluster_anchors(ann, max_diff_rt = 10)
+  expect_equal(nrow(out), 3)
+  # each anchor must be within max_diff_rt of every row it represents
+  g <- rt_cluster_index(ann$time, 10)
+  for (k in unique(g)) {
+    a <- out$time[out$rt_cluster == k]
+    expect_true(all(abs(ann$time[g == k] - a) <= 10))
+  }
+})
