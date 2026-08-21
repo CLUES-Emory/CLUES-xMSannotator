@@ -48,7 +48,9 @@ get_chemscore <- function(...,
   isotope_rows <- curmchemdata %>% filter(grepl(isotope_pattern, Adduct))
   monoisotopic_rows <- curmchemdata %>% filter(!grepl(isotope_pattern, Adduct))
 
-  has_isotopes <- nrow(isotope_rows) > 0
+  # NOTE: whether isotope evidence exists is decided AFTER scoring, once the
+  # winning module is known -- see below. Deciding it here would count isotopes
+  # from any module in the retention-time window.
 
   # Handle edge case: only isotopes, no monoisotopic peaks
   if (nrow(monoisotopic_rows) < 1) {
@@ -72,6 +74,22 @@ get_chemscore <- function(...,
   if (is.null(result$filtdata) || nrow(result$filtdata) < 1) {
     return(NULL)
   }
+
+  # ============================================
+  # Scope isotope evidence to the winning module
+  # ============================================
+  # compute_best_score() scores each Module_RTclust separately and keeps the
+  # best, so filtdata holds one module's rows. The isotope rows, however, were
+  # gathered from the whole +/- max_diff_rt window, which can span several
+  # modules: peaks sharing an m/z but belonging to different molecules cluster
+  # apart (within-module r ~ 0.98, between-module r ~ 0.10). Counting those as
+  # evidence gave a module a 100x boost on another molecule's isotopes.
+  # Measured on C18pos: 137 module groups (141 rows) were boosted this way.
+  winning_modules <- unique(result$filtdata$Module_RTclust)
+  isotope_rows <- isotope_rows[
+    isotope_rows$Module_RTclust %in% winning_modules, , drop = FALSE
+  ]
+  has_isotopes <- nrow(isotope_rows) > 0
 
   # ============================================
   # Apply 100x isotope boost if isotopes detected
