@@ -121,6 +121,62 @@ enforce_compound_coherence <- function(curdata) {
   curdata[modules == best_module, , drop = FALSE]
 }
 
+#' Filter compound data to the best-supported same-module group
+#'
+#' [enforce_compound_coherence()] keeps whichever module holds the most rows.
+#' That rule decides nothing when the modules are the same size, and most of the
+#' time they are: measured on CLU0009 C18pos, 365 of 473 multi-module groups were
+#' exact ties on row count. `table()` orders its names lexically and
+#' `which.max()` returns the first maximum, so the survivor was picked by
+#' string-sorting the module label -- and because labels are numbers held as
+#' text, the lowest leading digit won ("12" before "52"). In all 98 C18pos groups
+#' where that discarded the better-supported rows, what was lost was an `M+H`.
+#'
+#' This ranks modules on evidence already recorded in the table: Confidence,
+#' then row count, then whether a primary ion is present, then summed intensity.
+#' [cap_confidence_with_evidence()] has already judged each module- and
+#' retention-time-coherent group on its own evidence by the time this runs, so
+#' `Confidence` here is a per-module verdict rather than a compound-wide one --
+#' the answer was computed and then thrown away. The last criterion is a
+#' measured value, so no comparison ever falls back to the module's name.
+#'
+#' Only usable after [cap_confidence_with_evidence()]. Before that, every row of
+#' a compound shares one Confidence and the first criterion is inert.
+#'
+#' @param curdata Data frame of annotations for one compound
+#' @param level1_primary_adducts Character vector of primary adducts that count
+#'   toward the third criterion (default: c("M+H", "M-H"))
+#' @return Filtered data frame (same columns, potentially fewer rows)
+enforce_compound_coherence_by_evidence <- function(curdata,
+                                                   level1_primary_adducts = c("M+H", "M-H")) {
+  if (nrow(curdata) <= 1) return(curdata)
+  modules <- gsub(as.character(curdata$Module_RTclust), pattern = "_[0-9]*", replacement = "")
+  if (length(unique(modules)) <= 1) return(curdata)
+
+  base_adducts <- strip_isotope_suffix(curdata$Adduct)
+  confidence <- suppressWarnings(as.numeric(curdata$Confidence))
+  # mean_int_vec is present throughout Stage 4; default it so a caller passing a
+  # trimmed table still gets the first three criteria.
+  intensity <- if ("mean_int_vec" %in% names(curdata)) {
+    suppressWarnings(as.numeric(curdata$mean_int_vec))
+  } else {
+    rep(0, nrow(curdata))
+  }
+
+  groups <- split(seq_len(nrow(curdata)), modules)
+  rank <- vapply(groups, function(i) {
+    c(
+      max(confidence[i], na.rm = TRUE),
+      length(i),
+      as.numeric(any(base_adducts[i] %in% level1_primary_adducts)),
+      sum(intensity[i], na.rm = TRUE)
+    )
+  }, numeric(4))
+
+  best <- names(groups)[order(-rank[1, ], -rank[2, ], -rank[3, ], -rank[4, ])[1]]
+  curdata[modules == best, , drop = FALSE]
+}
+
 #' Partition one compound's annotations into module- and RT-coherent groups
 #'
 #' `enforce_compound_coherence()` resolves module conflicts but not retention-time

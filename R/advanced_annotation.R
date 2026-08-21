@@ -661,11 +661,16 @@ advanced_annotation <- function(peak_table,
               sep = "\t", row.names = FALSE)
   # ----------------------------
 
-  # Filter to coherent rows only (keep largest module group per compound)
+  # Filter to coherent rows only (keep the best-supported module group)
   # ----------------------------
+  # Ranked on the evidence cap_confidence_with_evidence() just recorded, not on
+  # row count. The row-count rule ties in most multi-module groups and then
+  # resolves lexically by module label, which discarded an M+H in all 98 C18pos
+  # groups where it kept the weaker module.
   annotation <- do.call(rbind, lapply(
     split(annotation, annotation$compound_id),
-    enforce_compound_coherence
+    enforce_compound_coherence_by_evidence,
+    level1_primary_adducts = level1_primary_adducts
   ))
   rownames(annotation) <- NULL
   # ----------------------------
