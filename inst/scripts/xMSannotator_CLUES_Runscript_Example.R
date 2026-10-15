@@ -225,6 +225,10 @@ cat(sprintf("Using %d adducts for %s mode\n", nrow(adduct_table), charge_type))
 
 # Core matching tolerances
 mass_tolerance      <- 5e-6     # 5 ppm (fractional, not integer ppm)
+# On CLU0009 (Orbitrap) confirmed compounds sat at a median 0.33 ppm and true
+# matches were exhausted by 1 ppm, so the 5f annotations used 1e-6 for both
+# mass_tolerance and isotope_mass_tolerance, with time_tolerance 2.5. Measure
+# your own instrument's accuracy before tightening these.
 time_tolerance      <- 10       # seconds
 correlation_threshold <- 0.7
 
@@ -250,6 +254,14 @@ network_type      <- "unsigned"
 MplusH_abundance_ratio_check  <- TRUE
 multimer_abundance_check      <- FALSE
 redundancy_filtering          <- FALSE  # Stage 4b is the canonical final output; set TRUE to also write Stage 5 (one row per (mz, time), destructive on multi-match evidence)
+# Report every retention-time cluster a compound matches, each with its own
+# confidence, instead of keeping one. Off by default in advanced_annotation();
+# on CLU0009 it raised recall of authentic-standard confirmed features from
+# 30 to 55 of 72. Output roughly doubles, almost all as Confidence 0, and the
+# n_rt_clusters column records how many candidates each compound had.
+# Untested with redundancy_filtering = TRUE.
+multi_rt_clusters             <- TRUE
+clustering_seed               <- 12345  # pins peak-module clustering; NULL leaves the RNG untouched
 min_ions_per_chemical         <- 2      # 1 accepts single-peak compounds; with 2, a
                                         # compound seen as one peak with no isotope
                                         # can only reach Confidence 1 via the rescue
@@ -314,6 +326,8 @@ system.time(
     identify_isotopologues_flag   = identify_isotopologues_flag,
     level1_primary_adducts        = level1_primary_adducts,
     charge_type                   = charge_type,
+    multi_rt_clusters             = multi_rt_clusters,
+    clustering_seed               = clustering_seed,
     pathway_mode                  = pathway_mode,
     pathway_data                  = pathway_data,
     excluded_pathways             = excluded_pathways,
