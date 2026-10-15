@@ -8,7 +8,8 @@ simple_annotation(
   peak_table,
   compound_table,
   adduct_table = NULL,
-  mass_tolerance = 5e-06
+  mass_tolerance = 5e-06,
+  charge_supplied = NULL
 )
 }
 \arguments{
@@ -25,6 +26,13 @@ matched across the supplied adducts but never at their neutral mass.}
 If NULL, the package default adduct table is used.}
 
 \item{mass_tolerance}{Mass tolerance as a fraction (e.g., 5e-6 for 5 ppm).}
+
+\item{charge_supplied}{Logical, or NULL to detect it from \code{compound_table}.
+Whether the compound table carried a \code{charge} column. Without one, charge
+is unknown and compounds keep their "M" (neutral-mass) matches as before,
+which is how permanently charged compounds listed at their ion mass are
+found. Callers that have already run \code{\link[=as_compound_table]{as_compound_table()}}, which always
+adds the column, must pass the value detected on the original table.}
 }
 \value{
 Data frame of annotations with peak, compound, adduct, and mz columns.

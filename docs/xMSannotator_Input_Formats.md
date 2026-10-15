@@ -43,7 +43,7 @@ Plus ONE of the following identifier columns:
 
 | Column | Type | Description | Validation |
 |--------|------|-------------|------------|
-| `charge` | integer | Permanent formal charge of the compound. Defaults to `0` (neutral) when absent. | Must be numeric; coerced to integer, `NA` becomes `0` |
+| `charge` | integer | Permanent formal charge of the compound. Defaults to `0` when absent, but an absent column is treated as *charge unknown*: neutral-mass (`M`) matches are kept (see below). | Must be numeric; coerced to integer, `NA` becomes `0` |
 
 ### Permanently Charged Compounds
 
@@ -58,7 +58,9 @@ The bare-ion pseudo-adducts are generated automatically, one per distinct non-ze
 
 If you build `adduct_weights` by hand rather than letting `advanced_annotation()` derive it, pass your adduct table through `add_bare_ion_adducts(adduct_table, compound_table)` first so the weights cover those rows.
 
-Note that neutral compounds are **not** matched at their neutral mass: every zero-mass-shift adduct, including the stock `M`, is restricted to charged compounds. Including `M` in `selected_adducts` no longer has any effect.
+When the database **carries a `charge` column**, neutral compounds are **not** matched at their neutral mass: every zero-mass-shift adduct, including the stock `M`, is restricted to charged compounds.
+
+When the database has **no `charge` column**, charge is unknown and `M` matches are kept, exactly as in 1.0.0. This matters for databases such as HMDB, which list permanently charged compounds (choline, for example) at their ion mass under a sign-less formula (`C5H14NO`, 104.1075): `M` is the only adduct that finds them. A message notes when this applies. To match such compounds as bare ions instead, add a `charge` column.
 
 ### Single-polarity runs
 
@@ -674,7 +676,7 @@ The `advanced_annotation()` function accepts the following parameters:
 | `intensity_deviation_tolerance` | numeric | `0.1` | Tolerance for intensity deviation in isotope matching (10%) |
 | `mass_tolerance` | numeric | `5e-6` | Mass accuracy as fractional (relative) tolerance. Use `5e-6` for 5 ppm, `10e-6` for 10 ppm. Do NOT enter direct ppm values. |
 | `isotope_mass_tolerance` | numeric | `NULL` | Fractional tolerance for isotope m/z matching. Defaults to `mass_tolerance`. Use `5e-6` for 5 ppm. |
-| `mass_defect_tolerance` | numeric | `0.1` | Tolerance for mass defect matching |
+| `mass_defect_tolerance` | numeric | `0.1` | In Da: how far the charge-corrected isotope spacing may sit from a whole isotope step. A cheap prefilter; `isotope_mass_tolerance` does the real work. **Units changed from binned mass-defect units to Da in 1.1.0**; values >= 0.5 disable the check and `compute_isotopes()` warns. The shipped runscripts use 0.02. |
 | `mass_defect_precision` | numeric | `0.01` | Precision for binning mass defects |
 | `time_tolerance` | numeric | `10` | Retention time tolerance in seconds |
 | `peak_rt_width` | numeric | `1` | Expected chromatographic peak width for RT clustering |
@@ -687,6 +689,8 @@ The `advanced_annotation()` function accepts the following parameters:
 | `min_ions_per_chemical` | integer | `2` | Minimum ions required to annotate a chemical |
 | `filter_by` | character vector | `NULL` | Primary adducts for confidence scoring. **Default changed from `c("M-H", "M+H")` to `NULL` on 2026-08-14** — naming a primary ion activates a stricter confidence regime, see below. |
 | `level1_primary_adducts` | character vector | `c("M+H", "M-H")` | Adducts that qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`. |
+| `multi_rt_clusters` | logical | `FALSE` | Annotate every retention-time cluster a compound matches, each with its own confidence, instead of choosing one. On CLU0009, recall of authentic-standard confirmed features rose from 30 to 55 of 72; output roughly doubles, almost entirely as Confidence 0. Untested with `redundancy_filtering = TRUE`. |
+| `clustering_seed` | integer | `12345` | RNG seed for peak-module clustering. `NULL` leaves the caller's random stream untouched. |
 | `charge_type` | character | `NULL` | `"pos"` or `"neg"`. Drops compounds whose permanent `charge` has the opposite sign; neutrals are kept in both. `NULL` searches both polarities and warns if the database carries both signs. Does not affect adduct selection. |
 | `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
 | `redundancy_filtering` | logical | `FALSE` | Opt-in Stage 5 multi-match resolution. `FALSE` (default) keeps `Stage4b_confidence_levels.txt` as the canonical final output, preserving the full evidence basis behind every confidence value. `TRUE` additionally writes `Stage5_curated_results.txt` with one row per `(mz, time)`; losing-compound rows (including their secondary adduct and isotope rows) are deleted, which can leave other rows of the same compound displaying confidence values computed from evidence no longer present in the file. |

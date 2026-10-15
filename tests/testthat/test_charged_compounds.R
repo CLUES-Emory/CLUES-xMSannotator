@@ -368,3 +368,86 @@ test_that("an empty filter_by is not activated by the bare-ion names", {
   expect_true(is_filter_empty(extend(NA_character_)))
   expect_equal(extend(c("M+H", "M-H")), c("M+H", "M-H", bare))
 })
+
+test_that("without a charge column, neutral-mass M matches are kept (HMDB-style ion entries)", {
+  # HMDB lists choline at its cation mass under a sign-less formula; the stock
+  # "M" adduct is the only way such entries were ever found. The earlier
+  # "annotates exactly as before" test dropped "M" from the adduct table, so it
+  # could not see this case.
+  choline <- data.frame(
+    compound = 1L, name = "Choline", molecular_formula = "C5H14NO",
+    monoisotopic_mass = 104.10753, stringsAsFactors = FALSE
+  )
+  peaks <- data.frame(mz = 104.10753, rt = 60)
+  adducts <- get_default_adduct_table()
+  adducts <- adducts[adducts$adduct %in% c("M", "M+H", "M+Na"), ]
+
+  expect_message(
+    result <- simple_annotation(peaks, choline, adducts),
+    "no `charge` column"
+  )
+  expect_equal(result$adduct, "M")
+
+  # with charge recorded, the same compound is matched only as its bare ion
+  charged <- transform(choline, charge = 1L)
+  expect_no_message(result_charged <- simple_annotation(peaks, charged, adducts))
+  expect_equal(result_charged$adduct, "[M]+")
+
+  # a neutral compound in a table that does record charge never matches "M"
+  neutral <- transform(choline, charge = 0L)
+  expect_equal(nrow(simple_annotation(peaks, neutral, adducts)), 0)
+})
+
+test_that("charge_supplied overrides detection for callers that pre-normalise the table", {
+  # advanced_annotation() runs as_compound_table() first, which always adds a
+  # charge column of zeros, so it passes what it saw on the original table.
+  choline <- data.frame(
+    compound = 1L, name = "Choline", molecular_formula = "C5H14NO",
+    monoisotopic_mass = 104.10753, charge = 0L, stringsAsFactors = FALSE
+  )
+  peaks <- data.frame(mz = 104.10753, rt = 60)
+  adducts <- get_default_adduct_table()
+  adducts <- adducts[adducts$adduct %in% c("M", "M+H"), ]
+
+  result <- suppressMessages(simple_annotation(peaks, choline, adducts, charge_supplied = FALSE))
+  expect_equal(result$adduct, "M")
+  expect_equal(nrow(simple_annotation(peaks, choline, adducts, charge_supplied = TRUE)), 0)
+})
+
+test_that("forms_valid_charge_pair allow_neutral_mass keeps M for neutrals only", {
+  expect_true(forms_valid_charge_pair(0L, "M", allow_neutral_mass = TRUE))
+  expect_true(forms_valid_charge_pair(0L, "M+H", allow_neutral_mass = TRUE))
+  expect_false(forms_valid_charge_pair(0L, "[M]+", allow_neutral_mass = TRUE))
+  # charged compounds are unaffected
+  expect_false(forms_valid_charge_pair(1L, "M", allow_neutral_mass = TRUE))
+  expect_true(forms_valid_charge_pair(1L, "[M]+", allow_neutral_mass = TRUE))
+})
+
+test_that("compute_isotopes warns when mass_defect_tolerance would disable the check", {
+  annotation <- dplyr::tibble(
+    peak = 1L, adduct = "M+H", compound = 1, expected_mass = 100,
+    mz = 100, rt = 50, rt_cluster = 1, mass_defect = 1,
+    molecular_formula = "C12H14N2", monoisotopic_mass = 99,
+    compound_id = "X", name = "x", mean_intensity = 100
+  )
+  peaks <- dplyr::tibble(
+    peak = 2L, mz = 100 + 1.003355, rt = 50, rt_cluster = 1,
+    mass_defect = 1, mean_intensity = 12.98
+  )
+  weights <- data.frame(adduct = "M+H", weight = 5)
+
+  # an old-unit value (the runscripts used 5) silently disabled the check
+  expect_warning(
+    compute_isotopes(annotation, weights, peak_table = peaks, rt_tolerance = 5,
+                     mass_defect_tolerance = 5, isotope_mass_tolerance_ppm = 5),
+    "disables the mass-defect check"
+  )
+  expect_no_warning(
+    compute_isotopes(annotation, weights, peak_table = peaks, rt_tolerance = 5,
+                     mass_defect_tolerance = 0.02, isotope_mass_tolerance_ppm = 5)
+  )
+  # the default now finds a real 13C step; the old default of 0 rejected it
+  default_run <- compute_isotopes(annotation, weights, peak_table = peaks,
+                                  rt_tolerance = 5, isotope_mass_tolerance_ppm = 5)
+  expect_true(any(default_run$mass_number_difference == 1))
+})

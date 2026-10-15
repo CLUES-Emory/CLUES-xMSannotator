@@ -8,7 +8,7 @@ compute_isotopes(
   annotation,
   adduct_weights,
   intensity_deviation_tolerance = 0.1,
-  mass_defect_tolerance = 0,
+  mass_defect_tolerance = 0.1,
   peak_table,
   rt_tolerance = 1,
   isotope_mass_tolerance_ppm = NULL,

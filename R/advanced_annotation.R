@@ -193,6 +193,11 @@ advanced_annotation <- function(peak_table,
     stop("charge_type must be one of: 'pos', 'neg'")
   }
 
+  # Record whether charge was supplied before as_compound_table() below adds a
+  # charge column of zeros: without it, charge 0 means "unknown", and the
+  # neutral-mass ("M") matches that find ion-mass entries must be kept.
+  charge_supplied <- is.element("charge", colnames(compound_table))
+
   # Drop compounds of the opposite polarity before the adduct table is derived
   # from them below: filtering later would remove the compounds but still create
   # their bare-ion rows and adduct weights.
@@ -316,7 +321,8 @@ advanced_annotation <- function(peak_table,
     peak_table = peak_table,
     compound_table = compound_table,
     adduct_table = adduct_table,
-    mass_tolerance = mass_tolerance
+    mass_tolerance = mass_tolerance,
+    charge_supplied = charge_supplied
   )
   # ---------------------------
 

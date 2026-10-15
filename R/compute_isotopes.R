@@ -273,11 +273,24 @@ detect_isotopic_peaks <- function(...,
 compute_isotopes <- function(annotation,
                              adduct_weights,
                              intensity_deviation_tolerance = 0.1,
-                             mass_defect_tolerance = 0,
+                             mass_defect_tolerance = 0.1,
                              peak_table,
                              rt_tolerance = 1,
                              isotope_mass_tolerance_ppm = NULL,
                              adduct_table = NULL) {
+  # mass_defect_tolerance is in Da (since 2026-08-13; previously binned
+  # mass-defect units). A real isotope step is never an exact integer -- 13C is
+  # 1.00336 -- so 0 now rejects every isotope; the default matches
+  # advanced_annotation(). At >= 0.5 Da every spacing passes, which silently
+  # disables the check: the likely cause is a script still passing the old-unit
+  # value (the shipped runscripts used 5).
+  if (mass_defect_tolerance >= 0.5) {
+    warning(sprintf(paste0(
+      "mass_defect_tolerance = %s Da disables the mass-defect check (any value >= 0.5 ",
+      "accepts every isotope spacing). It is now in Da; if this value comes from a ",
+      "script written for the old binned units, use about 0.02-0.1 instead."),
+      format(mass_defect_tolerance)))
+  }
   annotation <- mutate(annotation, mass_number_difference = 0)
   adducts <- semi_join(annotation, adduct_weights, by = "adduct")
 

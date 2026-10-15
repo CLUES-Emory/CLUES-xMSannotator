@@ -53,15 +53,25 @@ forms_valid_adduct_pair <- function(molecular_formula, adduct_formula) {
 #' stock "M". Excluding "M" for charged compounds also avoids reporting one hit
 #' twice, since "M" and "[M]+" give an identical expected mass at z = 1.
 #'
+#' The exclusion of "M" for neutral compounds is only valid when the compound
+#' table actually records charge. Databases without a `charge` column (HMDB,
+#' for example) list permanently charged compounds such as choline at their ion
+#' mass under a sign-less formula, and "M" is the only adduct that finds them.
+#' `allow_neutral_mass = TRUE` keeps that match for such tables.
+#'
 #' @param compound_charge Integer vector of compound formal charges.
 #' @param adduct Character vector of adduct names, same length.
+#' @param allow_neutral_mass Logical. If TRUE, neutral (charge 0) compounds may
+#'   also match the zero-shift "M" adduct. Set when the compound table carried
+#'   no `charge` column, so charge 0 means "unknown" rather than "neutral".
 #' @return Logical vector: TRUE for pairs that may be matched.
 #' @keywords internal
-forms_valid_charge_pair <- function(compound_charge, adduct) {
+forms_valid_charge_pair <- function(compound_charge, adduct, allow_neutral_mass = FALSE) {
   is_bare_ion <- startsWith(adduct, "[M]") | adduct == "M"
+  neutral_ok <- if (isTRUE(allow_neutral_mass)) !startsWith(adduct, "[M]") else !is_bare_ion
   ifelse(
     compound_charge == 0,
-    !is_bare_ion,
+    neutral_ok,
     adduct == bare_ion_adduct(compound_charge)
   )
 }
@@ -91,14 +101,32 @@ compute_multiple_matches <- function(annotation) {
 #' @param adduct_table Data frame with columns: adduct, charge, factor, mass.
 #'   If NULL, the package default adduct table is used.
 #' @param mass_tolerance Mass tolerance as a fraction (e.g., 5e-6 for 5 ppm).
+#' @param charge_supplied Logical, or NULL to detect it from `compound_table`.
+#'   Whether the compound table carried a `charge` column. Without one, charge
+#'   is unknown and compounds keep their "M" (neutral-mass) matches as before,
+#'   which is how permanently charged compounds listed at their ion mass are
+#'   found. Callers that have already run [as_compound_table()], which always
+#'   adds the column, must pass the value detected on the original table.
 #' @return Data frame of annotations with peak, compound, adduct, and mz columns.
 #' @export
 #' @import dplyr
 #' @importFrom rlang .data
 #' @useDynLib CLUES.xMSannotator
-simple_annotation <- function(peak_table, compound_table, adduct_table = NULL, mass_tolerance = 5e-6) {
+simple_annotation <- function(peak_table, compound_table, adduct_table = NULL, mass_tolerance = 5e-6,
+                              charge_supplied = NULL) {
   if (is.null(adduct_table)) {
     adduct_table <- sample_adduct_table
+  }
+  if (is.null(charge_supplied)) {
+    charge_supplied <- is.element("charge", colnames(compound_table))
+  }
+  if (!charge_supplied) {
+    message(
+      "compound_table has no `charge` column: compounds are also matched at ",
+      "their neutral mass (\"M\"), as before, which is how permanently charged ",
+      "compounds listed at their ion mass are found. Add a `charge` column to ",
+      "match them as bare ions and exclude neutral-mass matches."
+    )
   }
 
   peak_table <- as_peak_table(peak_table)
@@ -112,7 +140,8 @@ simple_annotation <- function(peak_table, compound_table, adduct_table = NULL, m
 
   annotation <- filter(annotation, check_golden_rules(.data$molecular_formula))
   annotation <- filter(annotation, forms_valid_adduct_pair(.data$molecular_formula, .data$adduct))
-  annotation <- filter(annotation, forms_valid_charge_pair(.data$charge, .data$adduct))
+  annotation <- filter(annotation, forms_valid_charge_pair(.data$charge, .data$adduct,
+                                                           allow_neutral_mass = !charge_supplied))
   # charge is an input constraint, not a result: dropping it keeps the output
   # contract stable and avoids colliding with the adduct table's own `charge`
   # in the downstream merges in get_chemscore and multilevelannotationstep4.

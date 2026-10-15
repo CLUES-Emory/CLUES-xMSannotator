@@ -4,12 +4,16 @@
 \alias{forms_valid_charge_pair}
 \title{Is this compound allowed to be observed as this adduct, given its charge?}
 \usage{
-forms_valid_charge_pair(compound_charge, adduct)
+forms_valid_charge_pair(compound_charge, adduct, allow_neutral_mass = FALSE)
 }
 \arguments{
 \item{compound_charge}{Integer vector of compound formal charges.}
 
 \item{adduct}{Character vector of adduct names, same length.}
+
+\item{allow_neutral_mass}{Logical. If TRUE, neutral (charge 0) compounds may
+also match the zero-shift "M" adduct. Set when the compound table carried
+no \code{charge} column, so charge 0 means "unknown" rather than "neutral".}
 }
 \value{
 Logical vector: TRUE for pairs that may be matched.
@@ -22,5 +26,12 @@ converse: it can form any ionization adduct but is never observed at its
 neutral mass, so every zero-mass-shift adduct is excluded, including the
 stock "M". Excluding "M" for charged compounds also avoids reporting one hit
 twice, since "M" and "\link{M}+" give an identical expected mass at z = 1.
+}
+\details{
+The exclusion of "M" for neutral compounds is only valid when the compound
+table actually records charge. Databases without a \code{charge} column (HMDB,
+for example) list permanently charged compounds such as choline at their ion
+mass under a sign-less formula, and "M" is the only adduct that finds them.
+\code{allow_neutral_mass = TRUE} keeps that match for such tables.
 }
 \keyword{internal}
