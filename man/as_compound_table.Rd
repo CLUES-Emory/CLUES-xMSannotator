@@ -16,7 +16,12 @@ unique, the supplied \code{compound} values are preserved. If \code{compound_id}
 provided but \code{compound} is missing or invalid, an integer \code{compound} column
 is auto-generated. If only \code{compound} is provided, \code{compound_id} is created
 as \code{"Formula_<compound>"}.
-}}
+}
+
+May also carry \code{charge} (integer): the compound's permanent formal charge.
+Defaults to 0 when absent. A non-zero charge means \code{monoisotopic_mass} is
+the electron-corrected ion mass and the compound is matched only as its
+bare ion (see \code{\link[=bare_ion_adduct]{bare_ion_adduct()}}), never across ionization adducts.}
 }
 \value{
 Compound table with required columns and expected types.

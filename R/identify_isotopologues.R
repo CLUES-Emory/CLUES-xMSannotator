@@ -1,3 +1,37 @@
+#' Electron rest mass in Da (CODATA), the amount an ion differs from its
+#' neutral formula per unit of charge.
+#' @keywords internal
+ELECTRON_MASS <- 0.00054857990924
+
+#' Electron-mass correction for a bare-ion pseudo-adduct
+#'
+#' Mass to add to a neutral formula mass so that it becomes the ion mass for
+#' `adduct`; zero for anything that is not a bare ion. A cation has lost
+#' `charge` electrons and is lighter by that much, an anion has gained them.
+#'
+#' Ordinary adducts need no such term because the electron bookkeeping already
+#' sits inside `adduct_table$mass` -- the proton shift is 1.007276, a hydrogen
+#' atom less one electron. A bare-ion pseudo-adduct carries `mass = 0` instead,
+#' because for a permanently charged compound the correction lives in the
+#' compound table, whose `monoisotopic_mass` is the electron-corrected ion mass
+#' (see `docs/xMSannotator_Input_Formats.md`). Anything that rebuilds the parent
+#' from a neutral elemental formula has to re-apply it.
+#'
+#' `forms_valid_charge_pair()` restricts a charged compound to
+#' `bare_ion_adduct(charge)`, so the sign is always present in the name; the
+#' stock "M" never reaches a charged compound and correctly returns 0.
+#'
+#' @param adduct Character scalar adduct name, e.g. "[M]+2".
+#' @param charge Charge magnitude; `adduct_table` stores it unsigned.
+#' @return Numeric scalar mass shift in Da.
+#' @keywords internal
+bare_ion_electron_shift <- function(adduct, charge) {
+  polarity <- sub("^\\[M\\]([+-]).*$", "\\1", adduct)
+  if (identical(polarity, adduct)) return(0)
+  direction <- if (identical(polarity, "+")) -1 else 1
+  direction * abs(charge) * ELECTRON_MASS
+}
+
 #' Generate isotopologue labels for a molecular formula using enviPat.
 #'
 #' Computes the fine isotopologue structure and builds human-readable labels
@@ -8,6 +42,10 @@
 #' @return Data frame with columns: mass_number_diff, neutral_mass, relative_abundance, isotopologue_label.
 #' @keywords internal
 get_isotopologue_labels <- function(formula, isotopes_data) {
+  # enviPat only parses pure elemental formulas: it tolerates a bare trailing
+  # sign but fails on a sign+digit suffix such as "C12H14N2+2". Matches what
+  # compute_isotopic_pattern() already does.
+  formula <- strip_formula_charge(formula)
   ep_result <- suppressMessages(enviPat::isopattern(
     isotopes_data, formula,
     threshold = 0.01,
@@ -130,9 +168,16 @@ identify_isotopologues <- function(annotation,
     adduct_row <- adduct_table[adduct_table$adduct == base_adduct, ]
     if (nrow(adduct_row) == 0) next
 
-    # Calculate theoretical m/z for each candidate isotopologue
+    # Calculate theoretical m/z for each candidate isotopologue.
+    # enviPat is called with charge = FALSE, so `neutral_mass` is the neutral
+    # isotopologue mass and a bare ion needs its electrons put back -- see
+    # bare_ion_electron_shift(). Without it the labeller anchored 5.90 ppm high
+    # for a dication such as paraquat, and the ppm check below then rejected a
+    # correct isotope.
     theo_mz <- (adduct_row$factor * candidates$neutral_mass +
-                  adduct_row$mass) / abs(adduct_row$charge)
+                  adduct_row$mass +
+                  bare_ion_electron_shift(base_adduct, adduct_row$charge)) /
+      abs(adduct_row$charge)
 
     # Match to closest by m/z
     best_idx <- which.min(abs(theo_mz - observed_mz))

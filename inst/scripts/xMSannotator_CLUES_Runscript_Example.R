@@ -37,7 +37,8 @@ lc_mode     <- paste0(lc_column, charge_type)  # e.g., "C18pos"
 # Feature table (tab-delimited .txt with mz, time/rt, and intensity columns)
 feature_table_path <- "path/to/feature_table.txt"
 
-# Compound database (.xlsx with compound_id, name, molecular_formula, monoisotopic_mass)
+# Compound database (.xlsx or delimited text) with compound_id, name,
+# molecular_formula, monoisotopic_mass, and optionally an integer `charge`
 compound_db_path <- "path/to/compound_database.xlsx"
 
 # Sample mapfile (tab-delimited .txt; set to NULL if not available)
@@ -129,7 +130,18 @@ cat(sprintf("Peak table: %d features x %d samples\n", nrow(peak_table), length(s
 # Section 4: Load Compound Database
 # =============================================================================
 
-compound_table <- read_xlsx(compound_db_path)
+# Accepts .xlsx/.xls, or any delimited text (.tsv/.txt are tab-delimited, .csv comma)
+read_compound_db <- function(path) {
+  ext <- tolower(tools::file_ext(path))
+  if (ext %in% c("xlsx", "xls")) {
+    as.data.frame(read_xlsx(path))
+  } else {
+    data.table::fread(path, data.table = FALSE,
+                      sep = if (ext == "csv") "," else "\t")
+  }
+}
+
+compound_table <- read_compound_db(compound_db_path)
 
 # Ensure expected column names
 expected_cols <- c("compound_id", "name", "molecular_formula", "monoisotopic_mass")
@@ -138,7 +150,14 @@ if (!all(expected_cols %in% colnames(compound_table))) {
   colnames(compound_table)[1:4] <- expected_cols
 }
 
-cat(sprintf("Compound database: %d compounds\n", nrow(compound_table)))
+# If the database carries a `charge` column, keep only compounds observable in
+# this polarity: neutrals plus permanent ions of the matching sign. Done here so
+# the adduct weights built in Section 5 do not cover the opposite polarity's
+# bare ions. No-op for a database without a `charge` column.
+compound_table <- filter_compounds_by_polarity(compound_table, charge_type)
+
+cat(sprintf("Compound database: %d compounds (%s mode)\n",
+            nrow(compound_table), charge_type))
 
 
 # =============================================================================
@@ -148,17 +167,48 @@ cat(sprintf("Compound database: %d compounds\n", nrow(compound_table)))
 # Load the package's built-in adduct table
 adduct_table <- get_default_adduct_table()
 
-# Select adducts based on ionization mode
+# Select adducts based on ionization mode.
+# "M" is deliberately absent: it is a zero mass shift, i.e. the neutral mass,
+# which is not an observable species. Permanently charged compounds are handled
+# separately through the bare-ion pseudo-adducts below.
+#
+# *** CHANGED 2026-08-14: filter_by is now NULL (was "M+H" / "M-H"). ***
+#
+# `filter_by` is the single most consequential parameter in this script, and its
+# effect is not obvious. It names the "primary ion(s)". Setting it ACTIVATES a
+# stricter confidence regime (`filter_is_active` in multilevelannotationstep4):
+#
+#   filter_by = "M+H"  a compound carrying no M+H is capped at Confidence 1, and
+#                      isotope evidence promotes only to Confidence 2.
+#   filter_by = NULL   no primary-ion requirement; isotope evidence promotes all
+#                      the way to Confidence 3.  <-- current setting
+#
+# On the CLU0122 C18pos dataset, with everything else held constant, this alone
+# moved Level 3 from 40 compounds to 136. NULL is the permissive choice: any
+# adduct with isotope support can reach Level 3, rather than only compounds
+# showing the canonical protonated/deprotonated ion.
+#
+# Results from the two settings are NOT comparable. Anything annotated with the
+# previous "M+H"/"M-H" setting must be re-run before it is compared against
+# output from this script, or the difference will read as a change in data
+# quality. To restore the conservative behaviour, set filter_by back to "M+H"
+# in the positive branch and "M-H" in the negative one.
 if (charge_type == "pos") {
-  selected_adducts <- c("M", "M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
-  filter_by <- "M+H"
+  selected_adducts <- c("M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
+  filter_by <- NULL
 } else {
   selected_adducts <- c("M-H", "M-H2O-H", "M+Na-2H", "M+Cl", "M+Hac-H", "2M-H")
-  filter_by <- "M-H"
+  filter_by <- NULL
 }
 
 # Filter adduct table to selected adducts
 adduct_table <- adduct_table[adduct_table$adduct %in% selected_adducts, ]
+
+# If the compound database carries a `charge` column, advanced_annotation() adds
+# one bare-ion pseudo-adduct per distinct non-zero charge ("[M]+", "[M]+2", ...)
+# so those compounds are searched at monoisotopic_mass / |z|. Add the same rows
+# here so the weights built below cover them; the call is a no-op otherwise.
+adduct_table <- add_bare_ion_adducts(adduct_table, compound_table)
 
 # Build adduct weights from filtered table
 adduct_weights <- data.frame(
@@ -175,6 +225,10 @@ cat(sprintf("Using %d adducts for %s mode\n", nrow(adduct_table), charge_type))
 
 # Core matching tolerances
 mass_tolerance      <- 5e-6     # 5 ppm (fractional, not integer ppm)
+# On CLU0009 (Orbitrap) confirmed compounds sat at a median 0.33 ppm and true
+# matches were exhausted by 1 ppm, so the 5f annotations used 1e-6 for both
+# mass_tolerance and isotope_mass_tolerance, with time_tolerance 2.5. Measure
+# your own instrument's accuracy before tightening these.
 time_tolerance      <- 10       # seconds
 correlation_threshold <- 0.7
 
@@ -182,7 +236,11 @@ correlation_threshold <- 0.7
 maximum_isotopes           <- 8
 mass_defect_precision      <- 0.01
 isotope_mass_tolerance     <- 7.5e-6  # ppm for isotope m/z matching (defaults to mass_tolerance)
-mass_defect_tolerance      <- 5
+mass_defect_tolerance      <- 0.02    # Da: how far the charge-corrected spacing may
+                                      # sit from a whole isotope step. A cheap prefilter;
+                                      # isotope_mass_tolerance does the real work. Measured
+                                      # on the CLUES DB, 0.02 retains 100% of true isotopes.
+                                      # Values >= 0.5 disable the check entirely.
 intensity_deviation_tolerance <- 0.3
 identify_isotopologues_flag   <- TRUE   # use enviPat to label isotopologues (13C, 15N, etc.)
 
@@ -196,8 +254,22 @@ network_type      <- "unsigned"
 MplusH_abundance_ratio_check  <- TRUE
 multimer_abundance_check      <- FALSE
 redundancy_filtering          <- FALSE  # Stage 4b is the canonical final output; set TRUE to also write Stage 5 (one row per (mz, time), destructive on multi-match evidence)
-min_ions_per_chemical         <- 2
+# Report every retention-time cluster a compound matches, each with its own
+# confidence, instead of keeping one. Off by default in advanced_annotation();
+# on CLU0009 it raised recall of authentic-standard confirmed features from
+# 30 to 55 of 72. Output roughly doubles, almost all as Confidence 0, and the
+# n_rt_clusters column records how many candidates each compound had.
+# Untested with redundancy_filtering = TRUE.
+multi_rt_clusters             <- TRUE
+clustering_seed               <- 12345  # pins peak-module clustering; NULL leaves the RNG untouched
+min_ions_per_chemical         <- 2      # 1 accepts single-peak compounds; with 2, a
+                                        # compound seen as one peak with no isotope
+                                        # can only reach Confidence 1 via the rescue
+                                        # branch in cap_confidence_with_evidence()
 level1_primary_adducts       <- c("M+H", "M-H")  # adducts that qualify for Conf 1 as a single match
+                                        # The bare-ion names ("[M]+", ...) are appended
+                                        # automatically when the database has a `charge`
+                                        # column, so permanent ions are not capped at 0.
 
 # Pathway settings
 pathway_mode                <- "skip"   # "skip", "HMDB", or "custom"
@@ -253,6 +325,9 @@ system.time(
     redundancy_filtering          = redundancy_filtering,
     identify_isotopologues_flag   = identify_isotopologues_flag,
     level1_primary_adducts        = level1_primary_adducts,
+    charge_type                   = charge_type,
+    multi_rt_clusters             = multi_rt_clusters,
+    clustering_seed               = clustering_seed,
     pathway_mode                  = pathway_mode,
     pathway_data                  = pathway_data,
     excluded_pathways             = excluded_pathways,
@@ -285,22 +360,33 @@ results <- read.table(results_file, sep = "\t", header = TRUE)
 
 # Join with compound metadata if a metafile is provided
 if (!is.null(db_metafile_path)) {
-  db_metafile <- read_xlsx(db_metafile_path)
+  db_metafile <- read_compound_db(db_metafile_path)
   names(db_metafile)[names(db_metafile) == "Formula_ID"] <- "compound_id"
   results <- left_join(results, db_metafile, by = "compound_id")
 }
 
-# Merge feature table QA metadata
-metadata_cols <- c("feature_id", "n_detected", "n_filled", "peak_quality",
-                   "alignment_score", "combined_score", "quality_category",
-                   "peak_shape", "passed_filter", "Water_fc",
-                   "Overall_detect_pct", "Study_Sample_detect_pct")
-# Also include any _CV columns (names vary by study, e.g., HRE.p1Std._CV, Study_Sample_CV)
-cv_cols <- grep("_CV$", colnames(feature_table), value = TRUE, ignore.case = TRUE)
-metadata_cols <- unique(c(metadata_cols, cv_cols))
-feature_metadata <- feature_table[, intersect(metadata_cols, colnames(feature_table))]
-feature_metadata <- unique(feature_metadata)
-results <- left_join(results, feature_metadata, by = "feature_id")
+# Merge feature table QA metadata, keyed on whatever the feature ID column is
+# called. Skipped when there is no ID column, or when none of the QA columns
+# below exist in this feature table.
+if (!is.null(feature_id_column) &&
+      feature_id_column %in% colnames(results) &&
+      feature_id_column %in% colnames(feature_table)) {
+  metadata_cols <- c(feature_id_column, "n_detected", "n_filled", "peak_quality",
+                     "alignment_score", "combined_score", "quality_category",
+                     "peak_shape", "passed_filter", "Water_fc",
+                     "Overall_detect_pct", "Study_Sample_detect_pct",
+                     "Num_Detected", "Percent_Detected", "Blank_FC",
+                     "mz_range_ppm", "time_range_sec")
+  # Also include any CV columns (names vary by study, e.g. HRE.p1Std._CV, p1Std-CV%)
+  cv_cols <- grep("_CV$|CV%$", colnames(feature_table), value = TRUE, ignore.case = TRUE)
+  metadata_cols <- unique(c(metadata_cols, cv_cols))
+  feature_metadata <- feature_table[, intersect(metadata_cols, colnames(feature_table)),
+                                    drop = FALSE]
+  feature_metadata <- unique(feature_metadata)
+  if (ncol(feature_metadata) > 1) {
+    results <- left_join(results, feature_metadata, by = feature_id_column)
+  }
+}
 
 # Export to Excel
 output_name <- file.path(outloc, paste0(lc_mode, "-", study_id, "_Annotation.xlsx"))

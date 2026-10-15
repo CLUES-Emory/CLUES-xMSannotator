@@ -25,10 +25,14 @@ Data frame with capped confidence levels
 Runs after Stage 4 and upgrade step to enforce evidence-based caps on
 confidence values. Unlike upgrade (which only raises), this function can
 lower confidence when evidence is insufficient. Skips Conf 0 and Conf 4
-(user-confirmed). Reuses enforce_compound_coherence() and
-check_compound_coherence() for module/RT evaluation.
+(user-confirmed).
 }
 \details{
+Each compound is split by \code{\link[=coherent_groups]{coherent_groups()}} into groups that are coherent by
+module and retention time, and each group is judged on the evidence co-located
+with it. A compound observed at two distant retention times therefore gets two
+independent verdicts rather than one verdict applied to both.
+
 Evidence cap tiers:
 \itemize{
 \item 3 (High): isotope rows + 1+ base adducts, module + RT coherent

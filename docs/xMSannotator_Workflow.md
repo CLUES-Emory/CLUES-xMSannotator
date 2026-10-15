@@ -689,6 +689,7 @@ Before diving into the full parameter reference table, use the sections below to
 | `filter_by` | c("M−H", "M+H") | 3, 4 | Expected primary adducts (gates certain confidence levels) |
 | `min_ions_per_chemical` | 2 | 4 | Minimum annotation rows per compound |
 | `level1_primary_adducts` | c("M+H", "M−H") | 4 | Adducts that qualify for Confidence Level 1 |
+| `charge_type` | NULL | 1 | `"pos"`/`"neg"`: drop compounds of the opposite permanent charge sign before matching |
 | `pathway_mode` | "HMDB" | 3b | Pathway analysis mode: "HMDB", "custom", or "skip" |
 | `pathway_data` | NULL | 3b | Custom pathway table (required if `pathway_mode = "custom"`) |
 | `excluded_pathways` | NULL | 3b | Pathway IDs to exclude from enrichment analysis |

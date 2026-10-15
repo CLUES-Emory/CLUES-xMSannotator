@@ -6,6 +6,8 @@ patrick::with_parameters_test_that("load_compound_table_parquet:", {
     filename,
     col_select = c("monoisotopic_mass", "molecular_formula", "compound", "name")
   )
+  # charge is an optional compound-table column defaulting to neutral
+  expected$charge <- 0L
   expect_equal(actual, expected)
 },
   db_name = c("hmdb", "pubchem")

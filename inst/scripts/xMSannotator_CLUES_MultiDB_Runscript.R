@@ -186,7 +186,14 @@ if (!all(expected_cols %in% colnames(compound_table))) {
   colnames(compound_table)[1:4] <- expected_cols
 }
 
-cat(sprintf("Compound database: %d compounds\n", nrow(compound_table)))
+# If the database carries a `charge` column, keep only compounds observable in
+# this polarity: neutrals plus permanent ions of the matching sign. Done here so
+# the adduct weights built below do not cover the opposite polarity's bare ions.
+# No-op for a database without a `charge` column.
+compound_table <- filter_compounds_by_polarity(compound_table, charge_type)
+
+cat(sprintf("Compound database: %d compounds (%s mode)\n",
+            nrow(compound_table), charge_type))
 
 # Load metadata file for post-processing
 db_metafile_path <- file.path(db_base_dir, db_ls[[ii, "Meta_File"]])
@@ -202,17 +209,40 @@ names(db_metafile)[names(db_metafile) == "Formula_ID"] <- "compound_id"
 # Load the package's built-in adduct table
 adduct_table <- get_default_adduct_table()
 
-# Select adducts based on ionization mode
+# Select adducts based on ionization mode.
+# "M" is deliberately absent: it is a zero mass shift, i.e. the neutral mass,
+# which is not an observable species. Permanently charged compounds are handled
+# separately through the bare-ion pseudo-adducts below.
+#
+# *** CHANGED 2026-08-14: filter_by is now NULL (was "M+H" / "M-H"). ***
+#
+# `filter_by` names the "primary ion(s)" and is the single most consequential
+# parameter here. Setting it ACTIVATES a stricter confidence regime
+# (`filter_is_active` in multilevelannotationstep4): a compound carrying no M+H
+# is capped at Confidence 1, and isotope evidence promotes only to Confidence 2.
+# With filter_by = NULL there is no primary-ion requirement and isotope evidence
+# promotes all the way to Confidence 3. On the CLU0122 C18pos dataset that
+# difference alone moved Level 3 from 40 compounds to 136.
+#
+# Results from the two settings are NOT comparable — re-run anything annotated
+# under the previous setting before comparing. To restore the conservative
+# behaviour, set filter_by back to "M+H" / "M-H" below.
 if (charge_type == "pos") {
-  selected_adducts <- c("M", "M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
-  filter_by <- "M+H"
+  selected_adducts <- c("M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
+  filter_by <- NULL
 } else {
   selected_adducts <- c("M-H", "M-H2O-H", "M+Na-2H", "M+Cl", "M+Hac-H", "2M-H")
-  filter_by <- "M-H"
+  filter_by <- NULL
 }
 
 # Filter adduct table to selected adducts
 adduct_table <- adduct_table[adduct_table$adduct %in% selected_adducts, ]
+
+# If the compound database carries a `charge` column, advanced_annotation() adds
+# one bare-ion pseudo-adduct per distinct non-zero charge ("[M]+", "[M]+2", ...)
+# so those compounds are searched at monoisotopic_mass / |z|. Add the same rows
+# here so the weights built below cover them; the call is a no-op otherwise.
+adduct_table <- add_bare_ion_adducts(adduct_table, compound_table)
 
 # Build adduct weights from filtered table
 adduct_weights <- data.frame(
@@ -229,6 +259,10 @@ cat(sprintf("Using %d adducts for %s mode\n", nrow(adduct_table), charge_type))
 
 # Core matching tolerances
 mass_tolerance      <- 5e-6     # 5 ppm (fractional, not integer ppm)
+# On CLU0009 (Orbitrap) confirmed compounds sat at a median 0.33 ppm and true
+# matches were exhausted by 1 ppm, so the 5f annotations used 1e-6 for both
+# mass_tolerance and isotope_mass_tolerance, with time_tolerance 2.5. Measure
+# your own instrument's accuracy before tightening these.
 time_tolerance      <- 10       # seconds
 correlation_threshold <- 0.7
 
@@ -236,7 +270,10 @@ correlation_threshold <- 0.7
 maximum_isotopes           <- 8
 mass_defect_precision      <- 0.01
 isotope_mass_tolerance     <- 7.5e-6  # defaults to mass_tolerance
-mass_defect_tolerance      <- 5
+mass_defect_tolerance      <- 0.02    # Da: how far the charge-corrected spacing may
+                                      # sit from a whole isotope step. A cheap prefilter;
+                                      # isotope_mass_tolerance does the real work.
+                                      # Values >= 0.5 disable the check entirely.
 intensity_deviation_tolerance <- 0.3
 identify_isotopologues_flag   <- TRUE   # use enviPat to label isotopologues (13C, 15N, etc.)
 
@@ -250,6 +287,14 @@ network_type      <- "unsigned"
 MplusH_abundance_ratio_check  <- TRUE
 multimer_abundance_check      <- FALSE
 redundancy_filtering          <- FALSE  # Stage 4b is the canonical final output; set TRUE to also write Stage 5 (one row per (mz, time), destructive on multi-match evidence)
+# Report every retention-time cluster a compound matches, each with its own
+# confidence, instead of keeping one. Off by default in advanced_annotation();
+# on CLU0009 it raised recall of authentic-standard confirmed features from
+# 30 to 55 of 72. Output roughly doubles, almost all as Confidence 0, and the
+# n_rt_clusters column records how many candidates each compound had.
+# Untested with redundancy_filtering = TRUE.
+multi_rt_clusters             <- TRUE
+clustering_seed               <- 12345  # pins peak-module clustering; NULL leaves the RNG untouched
 min_ions_per_chemical         <- 2
 level1_primary_adducts       <- c("M+H", "M-H")  # adducts that qualify for Conf 1 as a single match
 
@@ -318,6 +363,9 @@ system.time(
     redundancy_filtering          = redundancy_filtering,
     identify_isotopologues_flag   = identify_isotopologues_flag,
     level1_primary_adducts        = level1_primary_adducts,
+    charge_type                   = charge_type,
+    multi_rt_clusters             = multi_rt_clusters,
+    clustering_seed               = clustering_seed,
     pathway_mode                  = pathway_mode,
     pathway_data                  = pathway_data,
     excluded_pathways             = excluded_pathways,

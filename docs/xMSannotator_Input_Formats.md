@@ -39,6 +39,42 @@ Plus ONE of the following identifier columns:
 | `compound_id` | character | **Recommended.** User-defined compound identifier (e.g., "HMDB0000001", "C00001") | Must be unique |
 | `compound` | numeric | Legacy integer compound identifier | Must be unique, integers only |
 
+### Optional Columns
+
+| Column | Type | Description | Validation |
+|--------|------|-------------|------------|
+| `charge` | integer | Permanent formal charge of the compound. Defaults to `0` when absent, but an absent column is treated as *charge unknown*: neutral-mass (`M`) matches are kept (see below). | Must be numeric; coerced to integer, `NA` becomes `0` |
+
+### Permanently Charged Compounds
+
+A compound with a non-zero `charge` — a quaternary ammonium herbicide such as paraquat, for example — is already an ion. It does not pick up H⁺ or Na⁺ and does not form multimers, so it is matched **only as its bare ion**, never across the usual adducts.
+
+Two consequences for how you build the database:
+
+- **`monoisotopic_mass` must be the electron-corrected total ion mass** for these rows (the neutral formula mass minus one electron per charge), not m/z. The pipeline divides by `|charge|` itself. Paraquat (`C12H14N2+2`) has `monoisotopic_mass = 186.11460` and is searched at m/z 93.05730.
+- **Neutral rows keep the neutral monoisotopic mass**, exactly as before.
+
+The bare-ion pseudo-adducts are generated automatically, one per distinct non-zero charge present in your database, and named `[M]+`, `[M]+2`, `[M]-`, `[M]-5` and so on. You do not add them to your adduct table. They are also appended to `filter_by` and `level1_primary_adducts`, since a bare ion is the only adduct its compound can carry and would otherwise be capped at Confidence 0.
+
+If you build `adduct_weights` by hand rather than letting `advanced_annotation()` derive it, pass your adduct table through `add_bare_ion_adducts(adduct_table, compound_table)` first so the weights cover those rows.
+
+When the database **carries a `charge` column**, neutral compounds are **not** matched at their neutral mass: every zero-mass-shift adduct, including the stock `M`, is restricted to charged compounds.
+
+When the database has **no `charge` column**, charge is unknown and `M` matches are kept, exactly as in 1.0.0. This matters for databases such as HMDB, which list permanently charged compounds (choline, for example) at their ion mass under a sign-less formula (`C5H14NO`, 104.1075): `M` is the only adduct that finds them. A message notes when this applies. To match such compounds as bare ions instead, add a `charge` column.
+
+### Single-polarity runs
+
+A permanent ion is only observable in the polarity matching its own charge sign — a quaternary ammonium cation cannot be seen in negative mode. Pass `charge_type = "pos"` or `"neg"` to `advanced_annotation()` and compounds of the opposite sign are dropped before annotation. Neutral compounds ionize in both polarities and are always kept.
+
+```r
+annotation <- advanced_annotation(peak_table, compound_table, charge_type = "pos", ...)
+#> charge_type = 'pos': dropped 4 compounds of opposite charge sign (4315 remain)
+```
+
+Omitting `charge_type` searches both polarities, which is the behavior of every run written before this argument existed. If the database carries both signs, omitting it produces a warning. `charge_type` affects the compound table only — it does not select adducts or set `filter_by`, which you continue to choose by name.
+
+The helper is exported as `filter_compounds_by_polarity(compound_table, charge_type)` if you want to apply the same rule earlier, for example before building `adduct_weights` by hand so the weights do not cover the opposite polarity's bare ions. Applying it twice is harmless.
+
 ### Identifier Behavior
 
 - **If `compound_id` is provided** and `compound` is also present, numeric, and unique: both columns are preserved as-is. If `compound` is missing or invalid, an internal integer `compound` column is auto-generated. Your `compound_id` values flow through the entire pipeline and appear in all output files.
@@ -640,7 +676,7 @@ The `advanced_annotation()` function accepts the following parameters:
 | `intensity_deviation_tolerance` | numeric | `0.1` | Tolerance for intensity deviation in isotope matching (10%) |
 | `mass_tolerance` | numeric | `5e-6` | Mass accuracy as fractional (relative) tolerance. Use `5e-6` for 5 ppm, `10e-6` for 10 ppm. Do NOT enter direct ppm values. |
 | `isotope_mass_tolerance` | numeric | `NULL` | Fractional tolerance for isotope m/z matching. Defaults to `mass_tolerance`. Use `5e-6` for 5 ppm. |
-| `mass_defect_tolerance` | numeric | `0.1` | Tolerance for mass defect matching |
+| `mass_defect_tolerance` | numeric | `0.1` | In Da: how far the charge-corrected isotope spacing may sit from a whole isotope step. A cheap prefilter; `isotope_mass_tolerance` does the real work. **Units changed from binned mass-defect units to Da in 1.1.0**; values >= 0.5 disable the check and `compute_isotopes()` warns. The shipped runscripts use 0.02. |
 | `mass_defect_precision` | numeric | `0.01` | Precision for binning mass defects |
 | `time_tolerance` | numeric | `10` | Retention time tolerance in seconds |
 | `peak_rt_width` | numeric | `1` | Expected chromatographic peak width for RT clustering |
@@ -651,8 +687,11 @@ The `advanced_annotation()` function accepts the following parameters:
 | `min_cluster_size` | integer | `10` | Minimum peaks per module in WGCNA clustering |
 | `maximum_isotopes` | integer | `10` | Maximum isotope peaks to consider per compound |
 | `min_ions_per_chemical` | integer | `2` | Minimum ions required to annotate a chemical |
-| `filter_by` | character vector | `c("M-H", "M+H")` | Primary adducts for confidence scoring |
+| `filter_by` | character vector | `NULL` | Primary adducts for confidence scoring. **Default changed from `c("M-H", "M+H")` to `NULL` on 2026-08-14** — naming a primary ion activates a stricter confidence regime, see below. |
 | `level1_primary_adducts` | character vector | `c("M+H", "M-H")` | Adducts that qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`. |
+| `multi_rt_clusters` | logical | `FALSE` | Annotate every retention-time cluster a compound matches, each with its own confidence, instead of choosing one. On CLU0009, recall of authentic-standard confirmed features rose from 30 to 55 of 72; output roughly doubles, almost entirely as Confidence 0. Untested with `redundancy_filtering = TRUE`. |
+| `clustering_seed` | integer | `12345` | RNG seed for peak-module clustering. `NULL` leaves the caller's random stream untouched. |
+| `charge_type` | character | `NULL` | `"pos"` or `"neg"`. Drops compounds whose permanent `charge` has the opposite sign; neutrals are kept in both. `NULL` searches both polarities and warns if the database carries both signs. Does not affect adduct selection. |
 | `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
 | `redundancy_filtering` | logical | `FALSE` | Opt-in Stage 5 multi-match resolution. `FALSE` (default) keeps `Stage4b_confidence_levels.txt` as the canonical final output, preserving the full evidence basis behind every confidence value. `TRUE` additionally writes `Stage5_curated_results.txt` with one row per `(mz, time)`; losing-compound rows (including their secondary adduct and isotope rows) are deleted, which can leave other rows of the same compound displaying confidence values computed from evidence no longer present in the file. |
 | `identify_isotopologues_flag` | logical | `TRUE` | Use enviPat to identify specific isotopologue substitutions (e.g., 13C:1 vs 15N:1) for isotope peaks. Adds `isotopologue` and `isotopologue_quality` columns to output. Requires `enviPat` package (listed in Imports; always installed with the package). |
@@ -672,6 +711,37 @@ The `advanced_annotation()` function accepts the following parameters:
 - `10e-6` = 10 ppm
 - The matching algorithm uses: `|observed - expected| ≤ max(|observed|, |expected|) × tolerance`
 - Do NOT enter ppm values directly (e.g., do NOT use `5` for 5 ppm)
+
+### `filter_by` changes what a confidence level means
+
+> **Default changed 2026-08-14: `filter_by` is now `NULL`, previously
+> `c("M-H", "M+H")`.** Both runscripts were changed to match. This makes the
+> permissive regime the default: isotope evidence can now reach Confidence 3.
+> **Anything annotated before this date used the stricter regime and must be
+> re-run before its confidence levels are compared against new output.**
+
+`filter_by` names the primary ion(s). Whether it is set at all — not just which
+adducts it names — switches the confidence rules, via `filter_is_active` in
+`multilevelannotationstep4.R`:
+
+| | `filter_by = "M+H"` (active) | `filter_by = NULL` (inactive) |
+|---|---|---|
+| compound carrying no `M+H` | capped at Confidence 1 | no restriction |
+| isotope evidence + one adduct | promotes to Confidence 2 | promotes to **Confidence 3** |
+| isotope evidence + ≥2 adducts | promotes to Confidence 2 | promotes to **Confidence 3** |
+
+The effect is large. On the CLU0122 C18pos dataset, with everything else held
+constant, this one parameter moved Level 3 from 40 compounds to 136.
+
+Neither setting is right in general. Naming a primary ion is the conservative
+choice: it demands the canonical protonated or deprotonated form before awarding
+high confidence. `NULL` is permissive: any adduct with isotope support can reach
+Level 3. **Record which you used — results from the two settings are not
+comparable**, and a change here will look like a change in data quality.
+
+Note that `filter_by` is extended with the bare-ion names only when it is already
+active. Passing `NULL` keeps the permissive regime; it is not silently converted
+into a bare-ion-only filter.
 
 ### Example Usage
 

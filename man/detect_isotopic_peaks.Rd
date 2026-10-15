@@ -23,7 +23,12 @@ from their actual abundance ratio.}
 \item{peaks}{A peak table containing a peak identifier (unique number), mean intensity, module, and rt cluster
 of each identified peak.}
 
-\item{mass_defect_tolerance}{A number. Maximum difference in mass defect between two peaks of the same compound.}
+\item{mass_defect_tolerance}{A number, in Da. How far the charge-corrected
+spacing between an isotope candidate and its monoisotopic peak may sit from
+a whole isotope step. This is a cheap prefilter; mass accuracy is enforced by
+\code{isotope_mass_tolerance_ppm}, which should be set when calling directly.
+(Previously this was compared against binned mass-defect indices, which was
+charge-blind and discarded any isotope falling in a neighbouring bin.)}
 
 \item{rt_tolerance}{A number. Maximum rt difference for two peaks of the same substance.}
 

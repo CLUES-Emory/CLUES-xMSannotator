@@ -10,7 +10,8 @@ compute_peak_modules(
   correlation_threshold,
   deep_split,
   min_cluster_size,
-  network_type
+  network_type,
+  seed = 12345
 )
 }
 \arguments{
@@ -29,6 +30,10 @@ intensitiess of different peaks in one sample}
 \link{WGCNA::mergeCloseModules}, and \link{dynamicTreeCut::cutreeDynamic}}
 
 \item{network_type}{see \link{WGCNA::adjacency}}
+
+\item{seed}{Integer RNG seed pinning the clustering, or NULL to leave the
+caller's random stream untouched. Module labels feed the coherence checks
+that set confidence, so the value is fixed here rather than inherited.}
 }
 \value{
 data frame with 3 columns: \emph{peak}, \emph{mean_intensity}, and

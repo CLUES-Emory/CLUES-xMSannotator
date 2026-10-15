@@ -24,7 +24,7 @@ advanced_annotation(
   min_cluster_size = 10,
   maximum_isotopes = 10,
   min_ions_per_chemical = 2,
-  filter_by = c("M-H", "M+H"),
+  filter_by = NULL,
   network_type = "unsigned",
   redundancy_filtering = FALSE,
   pathway_mode = "HMDB",
@@ -37,6 +37,9 @@ advanced_annotation(
   boost_time_tolerance = NULL,
   identify_isotopologues_flag = TRUE,
   level1_primary_adducts = c("M+H", "M-H"),
+  multi_rt_clusters = FALSE,
+  charge_type = NULL,
+  clustering_seed = 12345,
   outloc = tempdir(),
   n_workers = parallel::detectCores()
 )

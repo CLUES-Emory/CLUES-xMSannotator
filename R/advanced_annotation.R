@@ -155,7 +155,13 @@ advanced_annotation <- function(peak_table,
                                 min_cluster_size = 10,
                                 maximum_isotopes = 10,
                                 min_ions_per_chemical = 2,
-                                filter_by = c("M-H", "M+H"),
+                                # Default changed to NULL (was c("M-H", "M+H")).
+                                # Naming a primary ion activates a stricter
+                                # confidence regime: a compound lacking it caps at
+                                # Confidence 1 and isotope evidence promotes only
+                                # to 2. NULL removes that requirement, so isotope
+                                # evidence can reach Confidence 3.
+                                filter_by = NULL,
                                 network_type = "unsigned",
                                 redundancy_filtering = FALSE,
                                 pathway_mode = "HMDB",
@@ -168,11 +174,66 @@ advanced_annotation <- function(peak_table,
                                 boost_time_tolerance = NULL,
                                 identify_isotopologues_flag = TRUE,
                                 level1_primary_adducts = c("M+H", "M-H"),
+                                # Report every retention-time cluster a compound
+                                # matches, rather than choosing one. Off by
+                                # default; the default path is unchanged.
+                                # Roughly doubles the output, almost entirely as
+                                # Confidence 0 rows, and each cluster carries its
+                                # own confidence. Note Stage 5 redundancy
+                                # filtering then sees several clusters per
+                                # compound; it is untested in that combination.
+                                multi_rt_clusters = FALSE,
+                                charge_type = NULL,
+                                # RNG seed pinning peak-module clustering; NULL
+                                # leaves the caller's random stream untouched.
+                                clustering_seed = 12345,
                                 outloc = tempdir(),
                                 n_workers = parallel::detectCores()) {
+  if (!is.null(charge_type) && !charge_type %in% c("pos", "neg")) {
+    stop("charge_type must be one of: 'pos', 'neg'")
+  }
+
+  # Record whether charge was supplied before as_compound_table() below adds a
+  # charge column of zeros: without it, charge 0 means "unknown", and the
+  # neutral-mass ("M") matches that find ion-mass entries must be kept.
+  charge_supplied <- is.element("charge", colnames(compound_table))
+
+  # Drop compounds of the opposite polarity before the adduct table is derived
+  # from them below: filtering later would remove the compounds but still create
+  # their bare-ion rows and adduct weights.
+  n_compounds_in <- nrow(compound_table)
+  compound_table <- filter_compounds_by_polarity(compound_table, charge_type)
+  if (!is.null(charge_type) && nrow(compound_table) < n_compounds_in) {
+    cat(sprintf(
+      "charge_type = '%s': dropped %d compounds of opposite charge sign (%d remain)\n",
+      charge_type, n_compounds_in - nrow(compound_table), nrow(compound_table)
+    ))
+  }
+
   if (is.null(adduct_table)) {
     adduct_table <- sample_adduct_table
   }
+
+  # Permanently charged compounds are matched as their bare ion. The rows must
+  # exist before adduct_weights is derived below and before Stages 3-5, which
+  # all inner-merge on adduct name and would otherwise drop those annotations.
+  adduct_table <- add_bare_ion_adducts(adduct_table, compound_table)
+  bare_ions <- adduct_table$adduct[startsWith(adduct_table$adduct, "[M]")]
+
+  # A bare ion is the only adduct its compound can ever carry, so unless it
+  # counts as a primary ion those compounds are capped at Confidence 0 by
+  # cap_confidence_with_evidence(). Safe for neutral compounds: both vectors are
+  # tested against each compound's own adducts, and a neutral compound can never
+  # be matched under a "[M]" name.
+  #
+  # Only extend filter_by when it is already active. An empty filter_by means
+  # "no primary-ion filter", and turning it into a bare-ion-only filter would
+  # flip filter_is_active for every compound in the run, capping isotope-backed
+  # evidence at Confidence 2 instead of 3.
+  if (!is_filter_empty(filter_by) && length(bare_ions) > 0) {
+    filter_by <- union(filter_by, bare_ions)
+  }
+  level1_primary_adducts <- union(level1_primary_adducts, bare_ions)
 
   if (is.null(adduct_weights)) {
     adduct_weights <- as.data.frame(tibble(adduct = adduct_table$adduct, weight = rep_len(5, length(adduct_table$adduct))))
@@ -260,7 +321,8 @@ advanced_annotation <- function(peak_table,
     peak_table = peak_table,
     compound_table = compound_table,
     adduct_table = adduct_table,
-    mass_tolerance = mass_tolerance
+    mass_tolerance = mass_tolerance,
+    charge_supplied = charge_supplied
   )
   # ---------------------------
 
@@ -315,7 +377,8 @@ advanced_annotation <- function(peak_table,
     correlation_threshold = correlation_threshold,
     deep_split = deep_split,
     min_cluster_size = min_cluster_size,
-    network_type = network_type
+    network_type = network_type,
+    seed = clustering_seed
   )
   # ----------------------------
 
@@ -363,7 +426,8 @@ advanced_annotation <- function(peak_table,
     mass_defect_tolerance = mass_defect_tolerance,
     peak_table = peak_table,
     rt_tolerance = time_tolerance,
-    isotope_mass_tolerance_ppm = isotope_mass_tolerance_ppm
+    isotope_mass_tolerance_ppm = isotope_mass_tolerance_ppm,
+    adduct_table = adduct_table
   )
   # ----------------------------
 
@@ -407,12 +471,38 @@ advanced_annotation <- function(peak_table,
   # Strip peak before scoring (hardcoded column indices in helpers break with extra cols)
   annotation$peak <- NULL
 
-  # Get unique compound_ids and process each once.
-  # NOTE: distinct() only controls how many times get_chemscore is CALLED.
-  # Inside get_chemscore, it queries the FULL annotation table for all rows
-  # with that compound_id, so ALL adducts are preserved.
-  unique_chemicals <- annotation %>%
-    dplyr::distinct(compound_id, .keep_all = TRUE)
+  # Choose the query rows. These only control how many times get_chemscore() is
+  # CALLED; it then re-queries the annotation table for that compound_id, but
+  # only within +/- max_diff_rt of the query row's time (get_chemscore.R:36-40).
+  # So each query row decides which chromatographic peak can be annotated, and
+  # how many query rows a compound gets decides how many of its peaks can be.
+  if (isTRUE(multi_rt_clusters)) {
+    # One anchor per (compound, retention-time cluster). get_chemscore() already
+    # scores within +/- max_diff_rt of the anchor, so several anchors simply
+    # produce several independent score blocks for the same compound.
+    unique_chemicals <- select_cluster_anchors(
+      annotation,
+      level1_primary_adducts = level1_primary_adducts,
+      max_diff_rt = time_tolerance
+    )
+    unique_chemicals$rt_cluster <- NULL
+  } else {
+    unique_chemicals <- annotation %>%
+      dplyr::distinct(compound_id, .keep_all = TRUE)
+  }
+
+  # Record how many candidate retention times each compound offered, before the
+  # table is reduced to one row per compound. Joined onto the Stage 4 outputs at
+  # the end so a reader can tell an unambiguous match from the best of a dozen;
+  # it takes no part in scoring.
+  rt_cluster_counts <- count_rt_clusters(annotation, max_diff_rt = time_tolerance)
+
+  # Drop the isotope evidence before scoring, for the same reason `peak` is
+  # dropped above: chemscore_helpers.R:606 and :726 call na.omit() on the whole
+  # frame, and isotope_ratio_dev is NA on every monoisotopic row, so leaving it
+  # in deletes the entire scoring frame.
+  annotation$isotope_ratio_dev <- NULL
+  unique_chemicals$isotope_ratio_dev <- NULL
 
   annotation <- purrr::pmap_dfr(
     unique_chemicals,
@@ -430,6 +520,17 @@ advanced_annotation <- function(peak_table,
 
   # Restore peak column after scoring
   annotation <- restore_peak_column(annotation, peak_restore_map)
+
+  if (isTRUE(multi_rt_clusters)) {
+    # Anchors are more than max_diff_rt apart but their +/- max_diff_rt windows
+    # can still overlap, so a row may be scored twice. Keep the better score.
+    key <- paste(annotation$compound_id, annotation$Adduct,
+                 round(as.numeric(annotation$mz), 5),
+                 round(as.numeric(annotation$time), 3), sep = "|")
+    ord <- order(key, -as.numeric(annotation$cur_chem_score))
+    annotation <- annotation[ord, , drop = FALSE]
+    annotation <- annotation[!duplicated(key[ord]), , drop = FALSE]
+  }
   # ----------------------------
 
   # Output Stage3: Chemical score results
@@ -438,6 +539,14 @@ advanced_annotation <- function(peak_table,
   write.table(stage3_output, file = file.path(outloc, "Stage3_chemical_scores.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
+
+  if (isTRUE(multi_rt_clusters)) {
+    # Qualify compound_id with the cluster index. Every later step keyed on
+    # compound identity -- the Stage 4 split, enforce_compound_coherence(),
+    # cap_confidence_with_evidence() and boost_confidence_of_IDs() -- then
+    # operates per cluster with no change to those functions.
+    annotation <- qualify_rt_clusters(annotation, max_diff_rt = time_tolerance)
+  }
 
   # Tool 9: pathway matching
   # ----------------------------
@@ -549,16 +658,25 @@ advanced_annotation <- function(peak_table,
 
   # Output Stage4a: Full confidence level results (all rows, including incoherent)
   # ----------------------------
+  # `annotation` stays cluster-qualified here so the coherence filter below runs
+  # per cluster; only the written copy is unqualified.
   stage4a_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
+  if (isTRUE(multi_rt_clusters)) stage4a_output <- unqualify_rt_clusters(stage4a_output)
+  stage4a_output <- dplyr::left_join(stage4a_output, rt_cluster_counts, by = "compound_id")
   write.table(stage4a_output, file = file.path(outloc, "Stage4a_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------
 
-  # Filter to coherent rows only (keep largest module group per compound)
+  # Filter to coherent rows only (keep the best-supported module group)
   # ----------------------------
+  # Ranked on the evidence cap_confidence_with_evidence() just recorded, not on
+  # row count. The row-count rule ties in most multi-module groups and then
+  # resolves lexically by module label, which discarded an M+H in all 98 C18pos
+  # groups where it kept the weaker module.
   annotation <- do.call(rbind, lapply(
     split(annotation, annotation$compound_id),
-    enforce_compound_coherence
+    enforce_compound_coherence_by_evidence,
+    level1_primary_adducts = level1_primary_adducts
   ))
   rownames(annotation) <- NULL
   # ----------------------------
@@ -570,9 +688,16 @@ advanced_annotation <- function(peak_table,
     decreasing = TRUE
   ), ]
 
+  if (isTRUE(multi_rt_clusters)) {
+    # The coherence filter has now run per cluster, so each retention-time
+    # cluster kept its own best module rather than the compound keeping one.
+    annotation <- unqualify_rt_clusters(annotation)
+  }
+
   # Output Stage4b: Coherent rows only (feeds Stage5)
   # ----------------------------
   stage4b_output <- safe_join_feature_id(annotation, feature_id_map, feature_id_column)
+  stage4b_output <- dplyr::left_join(stage4b_output, rt_cluster_counts, by = "compound_id")
   write.table(stage4b_output, file = file.path(outloc, "Stage4b_confidence_levels.txt"),
               sep = "\t", row.names = FALSE)
   # ----------------------------

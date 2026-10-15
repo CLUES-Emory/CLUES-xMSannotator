@@ -61,6 +61,118 @@ as_adduct_table <- function(data) {
   return(data)
 }
 
+#' Name of the bare-ion pseudo-adduct for a formal charge.
+#'
+#' A permanently charged compound (e.g. a quaternary ammonium herbicide) is
+#' already an ion and is observed at mass / |z| with no ionization adduct.
+#' Names are "[M]" plus the sign, plus the magnitude when |z| > 1, so e.g.
+#' 1 -> "[M]+", 2 -> "[M]+2", -5 -> "[M]-5". Returns NA for a neutral compound.
+#'
+#' The "[M]" prefix keeps these names clear of every pattern the pipeline
+#' matches on adduct names: the isotope suffix `_[+1]`, the `_.*` strip in
+#' multilevelannotationstep3, and the `[2-3]+M` multimer test in step 4.
+#'
+#' @param charge Integer vector of formal charges.
+#' @return Character vector of pseudo-adduct names, NA where charge is 0.
+#' @keywords internal
+bare_ion_adduct <- function(charge) {
+  ifelse(
+    charge == 0,
+    NA_character_,
+    paste0(
+      "[M]",
+      ifelse(charge > 0, "+", "-"),
+      ifelse(abs(charge) > 1, abs(charge), "")
+    )
+  )
+}
+
+#' Add the bare-ion pseudo-adducts required by permanently charged compounds.
+#'
+#' Appends one row per distinct non-zero compound charge, with
+#' \code{mass = 0}, \code{factor = 1} and \code{charge = |z|}, so that
+#' \code{match_by_mass} computes \code{monoisotopic_mass / |z|}. No-op for a
+#' neutral-only database or a compound table without a \code{charge} column,
+#' and idempotent.
+#'
+#' \code{advanced_annotation()} and \code{simple_annotation()} call this
+#' automatically. Call it directly only when building an \code{adduct_weights}
+#' table by hand, so the weights cover the bare-ion rows as well.
+#'
+#' @param adduct_table Adduct table to extend.
+#' @param compound_table Compound table, optionally carrying \code{charge}.
+#' @return The adduct table, with any missing bare-ion rows appended.
+#' @export
+add_bare_ion_adducts <- function(adduct_table, compound_table) {
+  if (!is.element("charge", colnames(compound_table))) {
+    return(adduct_table)
+  }
+
+  # Coerced here because this runs before as_compound_table() in the advanced
+  # pipeline, so the column may still be double or character (e.g. "+2").
+  charges <- suppressWarnings(as.integer(unique(compound_table$charge)))
+  charges <- charges[!is.na(charges) & charges != 0]
+  if (length(charges) == 0) {
+    return(adduct_table)
+  }
+
+  rows <- data.frame(
+    adduct = bare_ion_adduct(charges),
+    charge = as.integer(abs(charges)),
+    factor = 1L,
+    mass = 0,
+    stringsAsFactors = FALSE
+  )
+  rows <- rows[!is.element(rows$adduct, adduct_table$adduct), , drop = FALSE]
+  if (nrow(rows) == 0) {
+    return(adduct_table)
+  }
+
+  rbind(as.data.frame(adduct_table), rows)
+}
+
+#' Restrict a compound table to one ionization polarity.
+#'
+#' A permanently charged compound is observed only in the polarity matching its
+#' own charge sign: a quaternary ammonium cation cannot be seen in negative
+#' mode. Neutral compounds ionize in both and are always kept.
+#'
+#' With \code{charge_type = NULL} the table is returned unchanged, which is the
+#' behaviour of every caller written before this argument existed. A table
+#' carrying both signs then warns, because a single-polarity run would otherwise
+#' silently search m/z values its instrument cannot produce.
+#'
+#' No-op for a compound table without a \code{charge} column, and idempotent.
+#'
+#' @param compound_table Compound table, optionally carrying \code{charge}.
+#' @param charge_type \code{"pos"}, \code{"neg"}, or NULL for no filtering.
+#' @return The compound table, keeping only compounds observable in that polarity.
+#' @export
+filter_compounds_by_polarity <- function(compound_table, charge_type = NULL) {
+  if (!is.element("charge", colnames(compound_table))) {
+    return(compound_table)
+  }
+
+  # Coerced because this runs before as_compound_table() in the advanced
+  # pipeline, so the column may still be double or character (e.g. "+2").
+  charge <- suppressWarnings(as.integer(compound_table$charge))
+  charge[is.na(charge)] <- 0L
+
+  if (is.null(charge_type)) {
+    if (any(charge > 0) && any(charge < 0)) {
+      warning(
+        "compound_table contains both positively and negatively charged ",
+        "compounds and charge_type was not supplied, so both polarities will ",
+        "be searched. Set charge_type = 'pos' or 'neg' for a single-polarity run."
+      )
+    }
+    return(compound_table)
+  }
+
+  keep <- if (charge_type == "pos") charge >= 0 else charge <= 0
+  compound_table[keep, , drop = FALSE]
+}
+
 #' Select columns from compound table and ensure data types.
 #' @param data Compound database. Can contain either:
 #'   - `compound_id` (character): User-defined compound identifiers (e.g., "HMDB0000001")
@@ -70,6 +182,11 @@ as_adduct_table <- function(data) {
 #'   provided but `compound` is missing or invalid, an integer `compound` column
 #'   is auto-generated. If only `compound` is provided, `compound_id` is created
 #'   as `"Formula_<compound>"`.
+#'
+#'   May also carry `charge` (integer): the compound's permanent formal charge.
+#'   Defaults to 0 when absent. A non-zero charge means `monoisotopic_mass` is
+#'   the electron-corrected ion mass and the compound is matched only as its
+#'   bare ion (see [bare_ion_adduct()]), never across ionization adducts.
 #' @return Compound table with required columns and expected types.
 #' @import dplyr
 as_compound_table <- function(data) {
@@ -100,12 +217,24 @@ as_compound_table <- function(data) {
     data$compound_id <- paste0("Formula_", data$compound)
   }
 
+  # Optional formal charge. Non-zero means the compound is already an ion and is
+  # matched only as its bare ion; absent or NA means neutral.
+  if (!is.element("charge", colnames(data))) {
+    data$charge <- 0L
+  } else {
+    stopifnot(is.numeric(data$charge))
+    data$charge <- as.integer(data$charge)
+    data$charge[is.na(data$charge)] <- 0L
+  }
+  required <- c(required, "charge")
+
   data <- select(data, all_of(required))
 
   stopifnot(is.numeric(data$compound))
   stopifnot(is.numeric(data$monoisotopic_mass))
   stopifnot(is.character(data$molecular_formula))
   stopifnot(is.character(data$name))
+  stopifnot(is.integer(data$charge))
 
   return(data)
 }
@@ -278,4 +407,197 @@ as_pathway_table <- function(data) {
   data$pathway <- as.character(data$pathway)
 
   return(data)
+}
+
+#' Count the candidate retention-time clusters available for each compound
+#'
+#' `advanced_annotation()` keeps one peak per compound, so the annotation gives
+#' no sign of how many it chose between. That matters when reading the result: a
+#' compound whose mass matched a single retention time had no choice to exploit,
+#' while one matching a dozen had eleven chances for a flattering coincidence.
+#' Measured on CLU0009, the Confidence 3 rate rises from +0.2 points for
+#' single-candidate compounds to +40 points at eleven or more, and roughly a
+#' third of that gain is not explained by recovering the correct peak.
+#'
+#' Reporting the count lets a reader weight an annotation accordingly instead of
+#' treating every Confidence 3 alike.
+#'
+#' Clusters are counted on retention time alone -- peaks separated by more than
+#' `max_diff_rt` are distinct candidates, since that is the width of the window
+#' [get_chemscore()] scores within.
+#'
+#' @param annotation Annotation table with `compound_id` and `time` columns.
+#' @param max_diff_rt Retention time window in seconds.
+#' @return Data frame with `compound_id` and `n_rt_clusters`.
+#' @export
+count_rt_clusters <- function(annotation, max_diff_rt = 10) {
+  if (nrow(annotation) == 0) {
+    return(data.frame(compound_id = character(0), n_rt_clusters = integer(0),
+                      stringsAsFactors = FALSE))
+  }
+  counts <- tapply(as.numeric(annotation$time),
+                   as.character(annotation$compound_id),
+                   function(times) {
+                     max(rt_cluster_index(unique(times), max_diff_rt))
+                   })
+  data.frame(compound_id = names(counts),
+             n_rt_clusters = as.integer(counts),
+             stringsAsFactors = FALSE)
+}
+
+#' Assign retention-time cluster indices, bounded by the tolerance
+#'
+#' Groups retention times so that **no cluster spans more than `max_diff_rt`**.
+#' Each time is compared against the cluster's anchor -- the earliest time in it
+#' -- rather than against its immediate predecessor, so a chain of small gaps
+#' cannot accumulate into an arbitrarily wide cluster.
+#'
+#' That bound is what makes a cluster representable by a single query row:
+#' [get_chemscore()] scores only within +/- `max_diff_rt` of the anchor's time,
+#' so a cluster wider than the tolerance would contain rows its own anchor can
+#' never reach, and those rows would be silently dropped before scoring.
+#'
+#' @param times Numeric retention times.
+#' @param max_diff_rt Maximum span of a cluster, in seconds.
+#' @return Integer cluster index per element of `times`, numbered by ascending time.
+#' @export
+rt_cluster_index <- function(times, max_diff_rt = 10) {
+  n <- length(times)
+  if (n == 0) return(integer(0))
+  times <- as.numeric(times)
+  o <- order(times)
+  out <- integer(n)
+  id <- 1L
+  anchor <- times[o[1]]
+  out[o[1]] <- id
+  if (n > 1) {
+    for (k in 2:n) {
+      i <- o[k]
+      if (times[i] - anchor > max_diff_rt) {
+        id <- id + 1L
+        anchor <- times[i]
+      }
+      out[i] <- id
+    }
+  }
+  out
+}
+
+#' Choose one query anchor per compound per retention-time cluster
+#'
+#' Used when `multi_rt_clusters = TRUE`. Instead of the default single query
+#' row per compound, this picks the best peak within each retention-time
+#' cluster, so a compound whose mass matches at three distinct retention times
+#' is scored three times and reported three times.
+#'
+#' Clusters come from [rt_cluster_index()], so none spans more than
+#' `max_diff_rt` and each is therefore reachable from its own anchor. Within a cluster, candidates are the monoisotopic rows and
+#' are ranked on co-located isotope support, then isotope-ratio fidelity, then
+#' primary adduct, then intensity, then `mz` and `time` so the result never
+#' depends on input row order.
+#'
+#' @param annotation Annotation table after [reformat_annotation_table()].
+#' @param level1_primary_adducts Adducts treated as primary evidence.
+#' @param max_diff_rt Retention time window in seconds.
+#' @return One row per (compound_id, cluster), with an added `rt_cluster` index.
+#' @export
+select_cluster_anchors <- function(annotation,
+                                   level1_primary_adducts = c("M+H", "M-H"),
+                                   max_diff_rt = 10) {
+  if (nrow(annotation) == 0) {
+    annotation$rt_cluster <- integer(0)
+    return(annotation)
+  }
+  isotope_pattern <- "_\\[(\\+|\\-)[0-9]+\\]"
+  is_isotope <- grepl(isotope_pattern, annotation$Adduct)
+  base_adduct <- sub(isotope_pattern, "", annotation$Adduct)
+  module <- gsub(as.character(annotation$Module_RTclust),
+                 pattern = "_[0-9]*", replacement = "")
+  rt <- as.numeric(annotation$time)
+  mz <- as.numeric(annotation$mz)
+  intensity <- as.numeric(annotation$mean_int_vec)
+  ratio_dev <- if ("isotope_ratio_dev" %in% names(annotation)) {
+    as.numeric(annotation$isotope_ratio_dev)
+  } else {
+    rep(NA_real_, nrow(annotation))
+  }
+
+  rows_by_compound <- split(seq_len(nrow(annotation)),
+                            as.character(annotation$compound_id))
+  picked <- integer(0)
+  cluster_of <- integer(0)
+
+  for (idx in rows_by_compound) {
+    ordered <- idx[order(rt[idx])]
+    cl <- rt_cluster_index(rt[ordered], max_diff_rt)
+    for (k in unique(cl)) {
+      grp <- ordered[cl == k]
+      candidates <- grp[!is_isotope[grp]]
+      if (length(candidates) == 0) candidates <- grp
+      if (length(candidates) == 1) {
+        picked <- c(picked, candidates)
+        cluster_of <- c(cluster_of, k)
+        next
+      }
+      isotopes <- grp[is_isotope[grp]]
+      support <- integer(length(candidates))
+      fidelity <- rep(Inf, length(candidates))
+      for (j in seq_along(candidates)) {
+        i <- candidates[j]
+        co <- isotopes[module[isotopes] == module[i] &
+                         abs(rt[isotopes] - rt[i]) <= max_diff_rt]
+        support[j] <- length(co)
+        observed <- ratio_dev[co]
+        observed <- observed[!is.na(observed)]
+        if (length(observed) > 0) fidelity[j] <- min(observed)
+      }
+      primary <- as.integer(base_adduct[candidates] %in% level1_primary_adducts)
+      ranked <- order(-support, fidelity, -primary, -intensity[candidates],
+                      mz[candidates], rt[candidates])
+      picked <- c(picked, candidates[ranked[1]])
+      cluster_of <- c(cluster_of, k)
+    }
+  }
+  out <- annotation[picked, , drop = FALSE]
+  out$rt_cluster <- cluster_of
+  out
+}
+
+#' Qualify compound_id with a retention-time cluster index
+#'
+#' Appends `__rtN` to `compound_id` so that every downstream step keyed on
+#' compound identity -- the Stage 4 split, [enforce_compound_coherence()], and
+#' [cap_confidence_with_evidence()] -- operates per retention-time cluster
+#' instead of per compound, with no change to those functions.
+#'
+#' @param annotation Scored annotation table.
+#' @param max_diff_rt Retention time window in seconds.
+#' @return `annotation` with `compound_id` qualified.
+#' @export
+qualify_rt_clusters <- function(annotation, max_diff_rt = 10) {
+  if (nrow(annotation) == 0) return(annotation)
+  rt <- as.numeric(annotation$time)
+  cid <- as.character(annotation$compound_id)
+  out <- cid
+  for (idx in split(seq_len(nrow(annotation)), cid)) {
+    ordered <- idx[order(rt[idx])]
+    cl <- rt_cluster_index(rt[ordered], max_diff_rt)
+    out[ordered] <- paste0(cid[ordered], "__rt", cl)
+  }
+  annotation$compound_id <- out
+  annotation
+}
+
+#' Split a cluster-qualified compound_id back into its parts
+#' @param annotation Table whose `compound_id` may carry an `__rtN` suffix.
+#' @return `annotation` with plain `compound_id` and an added `rt_cluster`.
+#' @export
+unqualify_rt_clusters <- function(annotation) {
+  if (nrow(annotation) == 0 || !any(grepl("__rt[0-9]+$", annotation$compound_id))) {
+    return(annotation)
+  }
+  cid <- as.character(annotation$compound_id)
+  annotation$rt_cluster <- as.integer(sub("^.*__rt", "", cid))
+  annotation$compound_id <- sub("__rt[0-9]+$", "", cid)
+  annotation
 }

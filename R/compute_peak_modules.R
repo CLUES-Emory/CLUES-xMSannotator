@@ -25,6 +25,9 @@ compute_peak_correlations <- function(peak_intensity_matrix, correlation_method 
 #' @param min_cluster_size see \link{WGCNA::blockwiseModules},
 #' \link{WGCNA::mergeCloseModules}, and \link{dynamicTreeCut::cutreeDynamic}
 #' @param network_type see \link{WGCNA::adjacency}
+#' @param seed Integer RNG seed pinning the clustering, or NULL to leave the
+#'   caller's random stream untouched. Module labels feed the coherence checks
+#'   that set confidence, so the value is fixed here rather than inherited.
 #'
 #' @return data frame with 3 columns: \emph{peak}, \emph{mean_intensity}, and
 #' \emph{module}
@@ -36,8 +39,28 @@ compute_peak_modules <- function(
   correlation_threshold,
   deep_split,
   min_cluster_size,
-  network_type
+  network_type,
+  seed = 12345
 ) {
+  # Pin the RNG for the whole clustering step, restoring the caller's stream on
+  # exit so this function does not perturb anything downstream of it.
+  #
+  # The primary path is already reproducible without this: WGCNA::blockwiseModules
+  # saves .Random.seed, calls set.seed(randomSeed) with its own default of 54321,
+  # and restores afterwards, so the caller's state cannot leak in. Verified by
+  # running identical inputs from three separate R sessions under three different
+  # caller seeds and getting byte-identical module vectors. What this adds is that
+  # the seed becomes ours rather than a WGCNA default that could change upstream,
+  # and the guarantee extends to the mergeCloseModules fallback below, which has
+  # no randomSeed argument of its own.
+  if (!is.null(seed)) {
+    if (exists(".Random.seed", envir = globalenv())) {
+      saved_seed <- get(".Random.seed", envir = globalenv())
+      on.exit(assign(".Random.seed", saved_seed, envir = globalenv()), add = TRUE)
+    }
+    set.seed(seed)
+  }
+
   peak_correlation_matrix <- 1 - peak_correlation_matrix
 
   power_estimate <- WGCNA::pickSoftThreshold(peak_intensity_matrix)$powerEstimate
@@ -64,7 +87,8 @@ compute_peak_modules <- function(
     detectCutHeight = NULL,
     minModuleSize = min_cluster_size,
     pamRespectsDendro = FALSE,
-    mergeCutHeight = 1 - correlation_threshold
+    mergeCutHeight = 1 - correlation_threshold,
+    randomSeed = seed
   )
 
   if (!modules$MEsOK) {
