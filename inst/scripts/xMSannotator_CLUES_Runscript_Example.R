@@ -4,6 +4,8 @@
 #
 # This script demonstrates a complete annotation workflow including:
 #   - Loading and formatting a feature table with sample mapfile
+#   - Reading precomputed feature groups (Step 1 Stage 3), or filtering by
+#     blank fold change and letting advanced_annotation() cluster with WGCNA
 #   - Loading a compound database
 #   - Configuring adducts for positive or negative mode
 #   - Running advanced_annotation() with all available parameters
@@ -11,6 +13,8 @@
 #
 # Modify the Configuration section (Section 2) to match your data.
 # See docs/xMSannotator_Input_Formats.md for detailed file format specs.
+# Settings match xMSannotator_CLUES_MultiDB_Runscript.R (CLUES.xMSannotator
+# 1.2.0); the evidence for them is in that script's Section 5 and 6 comments.
 ###############################################################################
 
 # =============================================================================
@@ -52,8 +56,18 @@ dir.create(outloc, recursive = TRUE, showWarnings = FALSE)
 # Blank sample names to remove (matched against column 4 of mapfile)
 blank_names <- c("Water", "Blank")
 
-# Fold-change filter threshold (set to NULL to skip filtering)
-# Expects a column ending in "_fc" in the feature table
+# Feature groups from Step 1 Stage 3 (HighResolutionExposomics_Workflow v1.7.0+):
+# {output_dir}/{mode}/3-{mode}_{study}_Feature_Grouping/{mode}-{study}_Feature_Groups.txt
+# When given, its feature IDs define the feature set (Step 1 already applied the
+# blank fold-change filter, so fc_threshold is not used) and each group replaces
+# the WGCNA modules and RT clusters. Needs feature_id_column. Set to NULL to
+# filter by fc_threshold and let advanced_annotation() run WGCNA (on CLU0127,
+# about 10,000 features x 350 injections: about 15 min and 10 GB per run, against
+# under 1 min and 4 GB with the groups).
+feature_groups_path <- "path/to/3-C18pos_MyStudy_Feature_Grouping/C18pos-MyStudy_Feature_Groups.txt"
+
+# Fold-change filter threshold, used only when feature_groups_path is NULL
+# (set to NULL to skip filtering). Expects a column ending in "_fc".
 fc_threshold <- 5
 
 # Feature ID column name (set to NULL if feature table has no ID column)
@@ -71,8 +85,22 @@ db_metafile_path <- NULL
 # Read feature table
 feature_table <- data.table::fread(feature_table_path, data.table = FALSE)
 
-# Apply fold-change filter (column name varies but always ends with _fc)
-if (!is.null(fc_threshold)) {
+# Feature set: the Step 1 Stage 3 features, or else the fold-change filter
+# (column name varies but always ends with _fc)
+feature_groups <- NULL
+if (!is.null(feature_groups_path)) {
+  if (is.null(feature_id_column)) stop("feature_groups_path needs feature_id_column")
+  feature_groups <- data.table::fread(feature_groups_path, data.table = FALSE,
+                                      colClasses = list(character = "feature_id"))
+  feature_groups <- data.frame(feature_id = feature_groups$feature_id, group = feature_groups$feature_group)
+  missing_ids <- setdiff(feature_groups$feature_id, feature_table[[feature_id_column]])
+  if (length(missing_ids) > 0) {
+    stop(length(missing_ids), " feature_id values in ", feature_groups_path, " are not in the feature table")
+  }
+  feature_table <- feature_table[feature_table[[feature_id_column]] %in% feature_groups$feature_id, ]
+  cat(sprintf("Feature set from Step 1 Stage 3: %d features in %d groups (fc_threshold not applied)\n",
+              nrow(feature_table), length(unique(feature_groups$group))))
+} else if (!is.null(fc_threshold)) {
   fc_col <- grep("_fc$", colnames(feature_table), ignore.case = TRUE, value = TRUE)
   if (length(fc_col) == 1) {
     feature_table <- feature_table[feature_table[[fc_col]] >= fc_threshold, ]
@@ -172,33 +200,32 @@ adduct_table <- get_default_adduct_table()
 # which is not an observable species. Permanently charged compounds are handled
 # separately through the bare-ion pseudo-adducts below.
 #
-# *** CHANGED 2026-08-14: filter_by is now NULL (was "M+H" / "M-H"). ***
+# *** CHANGED 2026-10-22: filter_by is "M+H" / "M-H" again (NULL since 2026-08-14), ***
+# *** with weight 5 on M+H / M-H (was 1) and tighter tolerances (Section 6).           ***
 #
-# `filter_by` is the single most consequential parameter in this script, and its
-# effect is not obvious. It names the "primary ion(s)". Setting it ACTIVATES a
-# stricter confidence regime (`filter_is_active` in multilevelannotationstep4):
+# `filter_by` names the "primary ion(s)". Setting it ACTIVATES a stricter
+# confidence regime (`filter_is_active` in multilevelannotationstep4): a compound
+# with no primary-ion row skips the Stage 4 decision tree (Confidence 0, or 1
+# when its score is >= 10), and the later evidence upgrade gives at most
+# Confidence 2. Compounds with the primary ion can still reach Confidence 3.
+# The adduct weight multiplies the score by 10^weight of the compound's
+# highest-weight adduct, so weight 5 mainly decides which compound ranks first
+# on a feature. On CLU0127 against the CLUES confirmed library, with the Step 1
+# feature groups, these settings and the Section 6 tolerances gave precision of
+# Confidence >= 2 annotations 0.61 (C18pos) and 0.54 (C18neg), against 0.33 and
+# 0.36 with the previous ones (filter_by NULL, weight 1, 5 ppm, 10 s); details in
+# xMSannotator_CLUES_MultiDB_Runscript.R. One study only.
 #
-#   filter_by = "M+H"  a compound carrying no M+H is capped at Confidence 1, and
-#                      isotope evidence promotes only to Confidence 2.
-#   filter_by = NULL   no primary-ion requirement; isotope evidence promotes all
-#                      the way to Confidence 3.  <-- current setting
-#
-# On the CLU0122 C18pos dataset, with everything else held constant, this alone
-# moved Level 3 from 40 compounds to 136. NULL is the permissive choice: any
-# adduct with isotope support can reach Level 3, rather than only compounds
-# showing the canonical protonated/deprotonated ion.
-#
-# Results from the two settings are NOT comparable. Anything annotated with the
-# previous "M+H"/"M-H" setting must be re-run before it is compared against
-# output from this script, or the difference will read as a change in data
-# quality. To restore the conservative behaviour, set filter_by back to "M+H"
-# in the positive branch and "M-H" in the negative one.
+# Results from the two filter_by settings are NOT comparable: re-run anything
+# annotated with filter_by = NULL before comparing confidence levels. Set
+# filter_by <- NULL and primary_weight <- 1 to restore the 2026-08-14 settings.
+primary_weight <- 5
 if (charge_type == "pos") {
   selected_adducts <- c("M+H", "M+2H", "M+NH4", "M+Na", "M+ACN+H", "2M+H", "M+H-H2O")
-  filter_by <- NULL
+  filter_by <- "M+H"
 } else {
   selected_adducts <- c("M-H", "M-H2O-H", "M+Na-2H", "M+Cl", "M+Hac-H", "2M-H")
-  filter_by <- NULL
+  filter_by <- "M-H"
 }
 
 # Filter adduct table to selected adducts
@@ -210,10 +237,10 @@ adduct_table <- adduct_table[adduct_table$adduct %in% selected_adducts, ]
 # here so the weights built below cover them; the call is a no-op otherwise.
 adduct_table <- add_bare_ion_adducts(adduct_table, compound_table)
 
-# Build adduct weights from filtered table
+# Build adduct weights from filtered table (primary ions primary_weight, others 1)
 adduct_weights <- data.frame(
   adduct = adduct_table$adduct,
-  weight = rep(1, nrow(adduct_table))
+  weight = ifelse(adduct_table$adduct %in% c("M+H", "M-H"), primary_weight, 1)
 )
 
 cat(sprintf("Using %d adducts for %s mode\n", nrow(adduct_table), charge_type))
@@ -224,18 +251,21 @@ cat(sprintf("Using %d adducts for %s mode\n", nrow(adduct_table), charge_type))
 # =============================================================================
 
 # Core matching tolerances
-mass_tolerance      <- 5e-6     # 5 ppm (fractional, not integer ppm)
+# *** CHANGED 2026-10-22: mass and isotope tolerance 1.5 ppm (were 5 and 7.5), ***
+# *** time_tolerance 2.5 s (was 10).                                           ***
 # On CLU0009 (Orbitrap) confirmed compounds sat at a median 0.33 ppm and true
-# matches were exhausted by 1 ppm, so the 5f annotations used 1e-6 for both
-# mass_tolerance and isotope_mass_tolerance, with time_tolerance 2.5. Measure
-# your own instrument's accuracy before tightening these.
-time_tolerance      <- 10       # seconds
-correlation_threshold <- 0.7
+# matches were exhausted by 1 ppm. On CLU0127 (Orbitrap, with the Step 1 feature
+# groups) 1.5 ppm against 1 ppm gave precision 0.607 vs 0.615 (C18pos) and
+# 0.537 vs 0.547 (C18neg), with 3 more correct top-ranked compounds per mode.
+# Measure your own instrument's accuracy before changing these.
+mass_tolerance      <- 1.5e-6   # 1.5 ppm (fractional, not integer ppm)
+time_tolerance      <- 2.5      # seconds
+correlation_threshold <- 0.7    # also the WGCNA module merge threshold when feature groups are not given
 
 # Isotope parameters
 maximum_isotopes           <- 8
 mass_defect_precision      <- 0.01
-isotope_mass_tolerance     <- 7.5e-6  # ppm for isotope m/z matching (defaults to mass_tolerance)
+isotope_mass_tolerance     <- 1.5e-6  # 1.5 ppm (was 7.5e-6); defaults to mass_tolerance when NULL
 mass_defect_tolerance      <- 0.02    # Da: how far the charge-corrected spacing may
                                       # sit from a whole isotope step. A cheap prefilter;
                                       # isotope_mass_tolerance does the real work. Measured
@@ -244,7 +274,7 @@ mass_defect_tolerance      <- 0.02    # Da: how far the charge-corrected spacing
 intensity_deviation_tolerance <- 0.3
 identify_isotopologues_flag   <- TRUE   # use enviPat to label isotopologues (13C, 15N, etc.)
 
-# Peak and clustering parameters
+# Peak and clustering parameters (WGCNA clustering; unused when feature groups are given)
 peak_rt_width     <- 4
 deep_split        <- 2
 min_cluster_size  <- 10
@@ -261,7 +291,7 @@ redundancy_filtering          <- FALSE  # Stage 4b is the canonical final output
 # n_rt_clusters column records how many candidates each compound had.
 # Untested with redundancy_filtering = TRUE.
 multi_rt_clusters             <- TRUE
-clustering_seed               <- 12345  # pins peak-module clustering; NULL leaves the RNG untouched
+clustering_seed               <- 12345  # pins WGCNA peak-module clustering; NULL leaves the RNG untouched
 min_ions_per_chemical         <- 2      # 1 accepts single-peak compounds; with 2, a
                                         # compound seen as one peak with no isotope
                                         # can only reach Confidence 1 via the rescue
@@ -337,6 +367,7 @@ system.time(
     boost_mass_tolerance          = boost_mass_tolerance,
     boost_time_tolerance          = boost_time_tolerance,
     feature_id_column             = feature_id_column,
+    feature_groups                = feature_groups,
     outloc                        = outloc,
     n_workers                     = n_workers
   )
@@ -371,12 +402,18 @@ if (!is.null(db_metafile_path)) {
 if (!is.null(feature_id_column) &&
       feature_id_column %in% colnames(results) &&
       feature_id_column %in% colnames(feature_table)) {
-  metadata_cols <- c(feature_id_column, "n_detected", "n_filled", "peak_quality",
-                     "alignment_score", "combined_score", "quality_category",
-                     "peak_shape", "passed_filter", "Water_fc",
+  # Names from Step 1 v1.6.0+ and from earlier versions; intersect() below
+  # keeps those present in this table.
+  metadata_cols <- c(feature_id_column, "rtmin", "rtmax", "n_detected", "n_filled",
+                     "rt_range_10_90", "mz_range_ppm", "median_snr_asari",
+                     "frac_no_baseline", "median_dppm", "median_width", "median_n_scans",
+                     "Water_fc", "Water_status", "Overall_detected_pct",
+                     "Overall_nonzero_pct", "Study_Sample_detected_pct",
+                     # before Step 1 v1.6.0
+                     "peak_quality", "alignment_score", "combined_score",
+                     "quality_category", "peak_shape", "passed_filter",
                      "Overall_detect_pct", "Study_Sample_detect_pct",
-                     "Num_Detected", "Percent_Detected", "Blank_FC",
-                     "mz_range_ppm", "time_range_sec")
+                     "Num_Detected", "Percent_Detected", "Blank_FC", "time_range_sec")
   # Also include any CV columns (names vary by study, e.g. HRE.p1Std._CV, p1Std-CV%)
   cv_cols <- grep("_CV$|CV%$", colnames(feature_table), value = TRUE, ignore.case = TRUE)
   metadata_cols <- unique(c(metadata_cols, cv_cols))
@@ -386,6 +423,11 @@ if (!is.null(feature_id_column) &&
   if (ncol(feature_metadata) > 1) {
     results <- left_join(results, feature_metadata, by = feature_id_column)
   }
+}
+if (!is.null(feature_groups)) {
+  feature_groups_out <- rename(feature_groups, feature_group = group)
+  names(feature_groups_out)[1] <- feature_id_column
+  results <- left_join(results, feature_groups_out, by = feature_id_column)
 }
 
 # Export to Excel

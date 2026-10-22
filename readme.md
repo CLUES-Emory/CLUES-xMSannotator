@@ -16,14 +16,15 @@ An updated fork of [RECETOX/recetox-xMSannotator](https://github.com/RECETOX/rec
 | [Input File Formats](docs/xMSannotator_Input_Formats.md) | API-level specification for all input tables, parameters, and working examples |
 | [Input Data Pre-Processing](docs/advanced_annotation_input_formatting.md) | XCMS feature table, sample mapfile, and compound database formats with pre-processing steps |
 | [Stage 5 Output Reference](docs/Stage5_Output_Reference.md) | Column definitions for the primary output file |
-| [Changelog](docs/CHANGELOG.md) | All notable changes, bug fixes, and new features |
+| [Release notes](NEWS.md) | Changes by version (1.1.0 onward) |
+| [Changelog](docs/CHANGELOG.md) | Dated changes, bug fixes, and new features |
 
 ### Example Scripts
 
 | Script | Description |
 |--------|-------------|
-| [Example Runscript](inst/scripts/xMSannotator_CLUES_Runscript_Example.R) | Complete single-database annotation workflow |
-| [Multi-DB Runscript](inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R) | SLURM array job script for multi-database annotation |
+| [Example Runscript](inst/scripts/xMSannotator_CLUES_Runscript_Example.R) | Complete single-database annotation workflow; reads Step 1 Stage 3 feature groups when `feature_groups_path` is set |
+| [Multi-DB Runscript](inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R) | SLURM array job script for multi-database annotation; reads Step 1 Stage 3 feature groups when the file exists, otherwise WGCNA |
 | [SLURM Wrapper](inst/scripts/run_CLUES_xMSannotator.sh) | Bash/SLURM submission script for dual-polarity batch jobs |
 
 ### recetox-xMSannotator Developer & Legacy Docs
@@ -43,11 +44,11 @@ An updated fork of [RECETOX/recetox-xMSannotator](https://github.com/RECETOX/rec
   <img src="docs/xMSannotator_Workflow.png" alt="xMSannotator annotation workflow" width="600">
 </p>
 
-***Figure 1. Overview of the xMSannotator annotation workflow.** The pipeline takes a peak table, compound database, and adduct table as inputs and proceeds through six stages: (1) brute-force mass matching within ppm tolerance, (1.5) WGCNA co-abundance network analysis with RT sub-clustering, (2) theoretical isotope envelope matching via enviPat, (3) multi-evidence chemical scoring combining adduct count, correlation, isotope confirmation, and RT coherence, (3b) pathway enrichment using Fisher's exact test, (4) confidence assignment (0–3) via decision-tree classification with module and RT coherence filtering, and (5) redundancy filtering to resolve multi-compound matches per feature. User-verified compounds supplied via the boosted_compounds parameter receive Confidence 4. The final output is a curated annotation table with confidence levels, chemical scores, and match categories.*
+***Figure 1. Overview of the xMSannotator annotation workflow.** The pipeline takes a peak table, compound database, and adduct table as inputs and proceeds through six stages: (1) brute-force mass matching within ppm tolerance, (1.5) WGCNA co-abundance network analysis with RT sub-clustering (or precomputed feature groups via `feature_groups`), (2) theoretical isotope envelope matching via enviPat, (3) multi-evidence chemical scoring combining adduct count, correlation, isotope confirmation, and RT coherence, (3b) pathway enrichment using Fisher's exact test, (4) confidence assignment (0–3) via decision-tree classification with module and RT coherence filtering, and (5) redundancy filtering to resolve multi-compound matches per feature. User-verified compounds supplied via the boosted_compounds parameter receive Confidence 4. The final output is a curated annotation table with confidence levels, chemical scores, and match categories.*
 
 The annotation pipeline runs through five stages via `advanced_annotation()`. See the [Pipeline Workflow Reference](docs/xMSannotator_Workflow.md) for full algorithmic details, scoring formulas, and parameter guidance.
 
-1. **Stage 1 - Mass Matching**: Matches observed m/z values to compound databases across all specified adducts. Assigns peaks to correlation-based modules and RT clusters.
+1. **Stage 1 - Mass Matching**: Matches observed m/z values to compound databases across all specified adducts. Assigns peaks to correlation-based modules and RT clusters (WGCNA), or takes the modules from `feature_groups` (one module per group, RT cluster 1).
 2. **Stage 2 - Isotope Detection**: Identifies isotopic peaks (M+1, M+2, etc.) based on mass differences, intensity ratios, and RT agreement.
 3. **Stage 3 - Chemical Scoring**: Scores each compound annotation using adduct correlation evidence, module membership, and isotope support. Optionally integrates pathway enrichment (HMDB or custom).
 4. **Stage 4 - Confidence Assignment**: Assigns confidence levels (0-4) based on adduct evidence, isotope detection, RT coherence, and module coherence. Enforces hard evidence requirements via a post-hoc cap (see [Confidence Levels](#confidence-levels)). Identifies isotopologues (e.g., 13C, 15N substitutions). Adds `Confidence_Level` text labels to output. Outputs Stage4a (all rows) and Stage4b (coherent rows only); Stage 5 uses Stage4b.

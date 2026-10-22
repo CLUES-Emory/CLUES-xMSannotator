@@ -9,8 +9,8 @@
   group is one module and every peak has `rt_cluster` 1, so isotope candidates
   are limited by `time_tolerance` only. Needs `feature_id_column`; every peak
   must have a group. On CLU0127 (about 10,000 features x 347 injections) a run
-  took about 27 s instead of 12-15 min, with the same accuracy against the
-  confirmed library. `NULL` (default) leaves the output unchanged.
+  took about 30 s instead of 11-17 min, and precision against the confirmed
+  library differed by at most 0.01. `NULL` (default) leaves the output unchanged.
 
 ## MultiDB runscript (`inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R`)
 
@@ -31,6 +31,17 @@ Results are not comparable with runs made with the 1.1.0 runscript.
 * Feature metadata columns in the exported table updated to Step 1 v1.6.0 names
   (earlier names still used when present); adds `rtmin`, `rtmax` and
   `feature_group`.
+
+## Example runscript and SLURM wrapper
+
+* `xMSannotator_CLUES_Runscript_Example.R`: new `feature_groups_path` (Step 1
+  Stage 3 groups file; `NULL` falls back to the `fc_threshold` filter and
+  WGCNA), and the MultiDB runscript's settings: `filter_by` M+H / M-H, weight 5,
+  1.5 ppm mass and isotope tolerance, 2.5 s, Step 1 v1.6.0 metadata columns.
+* `run_CLUES_xMSannotator.sh`: comments only (groups file, `fc_threshold` use,
+  memory per task).
+* Documentation: `feature_groups` in the Workflow reference, Input Formats,
+  pre-processing guide and Stage 5 reference; readme links `NEWS.md`.
 
 # CLUES.xMSannotator 1.1.0
 
