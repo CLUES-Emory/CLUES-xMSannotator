@@ -1,3 +1,37 @@
+# CLUES.xMSannotator 1.2.0
+
+## New features
+
+* `advanced_annotation()` gains `feature_groups`: a data frame of `feature_id`
+  and `group`, e.g. the feature groups written by Step 1 Stage 3
+  (HighResolutionExposomics_Workflow v1.7.0, `*_Feature_Groups.txt`). When
+  given, WGCNA peak modules and retention-time clusters are not computed: each
+  group is one module and every peak has `rt_cluster` 1, so isotope candidates
+  are limited by `time_tolerance` only. Needs `feature_id_column`; every peak
+  must have a group. On CLU0127 (about 10,000 features x 347 injections) a run
+  took about 27 s instead of 12-15 min, with the same accuracy against the
+  confirmed library. `NULL` (default) leaves the output unchanged.
+
+## MultiDB runscript (`inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R`)
+
+Results are not comparable with runs made with the 1.1.0 runscript.
+
+* Reads the Step 1 Stage 3 feature groups when the file exists
+  (`3-<mode>_<study>_Feature_Grouping/<mode>-<study>_Feature_Groups.txt`); their
+  feature IDs then define the feature set and the `fc_threshold` argument is not
+  applied. Without the file, the fold-change filter and WGCNA run as before.
+* New defaults: `filter_by` M+H / M-H (was `NULL`), weight 5 for M+H / M-H
+  (was 1), `mass_tolerance` and `isotope_mass_tolerance` 1.5e-6 (were 5e-6 and
+  7.5e-6), `time_tolerance` 2.5 s (was 10). Chosen on CLU0127 C18pos/C18neg
+  against the CLUES confirmed library; the evidence is in the Section 5 and 6
+  comments.
+* Selects the `*_Untargeted_RAW_Feature_Table_*.txt` file in the Unadjusted
+  folder. Step 1 v1.3.2+ also writes the injection QC flags there, so the
+  previous `.txt` pattern passed two files to `fread()`, which failed.
+* Feature metadata columns in the exported table updated to Step 1 v1.6.0 names
+  (earlier names still used when present); adds `rtmin`, `rtmax` and
+  `feature_group`.
+
 # CLUES.xMSannotator 1.1.0
 
 ## Results are not comparable with 1.0.0

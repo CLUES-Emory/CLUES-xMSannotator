@@ -133,6 +133,17 @@ skip_pathway_step <- function(chemscoremat, outloc, mz_rt_feature_id_map = NULL)
 }
 
 #' Wrapper for the advanced annotation steps.
+#' @param feature_groups Optional data frame with columns `feature_id` and
+#'   `group` (one row per feature), e.g. the Step 1 Stage 3 feature groups
+#'   (`*_Feature_Groups.txt`, column `feature_group` renamed to `group`).
+#'   Requires `feature_id_column`; every peak must have a group. When given,
+#'   WGCNA peak modules and retention-time clusters are not computed: each
+#'   group becomes one module and every peak gets `rt_cluster` 1, so isotope
+#'   candidates are limited by `time_tolerance` only. The correlation matrix is
+#'   still computed for scoring. `correlation_threshold` still applies to
+#'   scoring; `deep_split`, `min_cluster_size`, `network_type`,
+#'   `peak_rt_width` and `clustering_seed` are then unused. `NULL` (default)
+#'   clusters as before.
 #' @export
 #' @import dplyr
 #' @importFrom magrittr %>%
@@ -187,6 +198,9 @@ advanced_annotation <- function(peak_table,
                                 # RNG seed pinning peak-module clustering; NULL
                                 # leaves the caller's random stream untouched.
                                 clustering_seed = 12345,
+                                # Externally computed feature groups replace
+                                # WGCNA modules and RT clusters; see @param.
+                                feature_groups = NULL,
                                 outloc = tempdir(),
                                 n_workers = parallel::detectCores()) {
   if (!is.null(charge_type) && !charge_type %in% c("pos", "neg")) {
@@ -310,6 +324,28 @@ advanced_annotation <- function(peak_table,
     }
   }
 
+  # External feature groups: checked here, used in place of Tools 4-5 below.
+  # peak_group is aligned with peak_table$peak (feature_id_map is built from it).
+  peak_group <- NULL
+  if (!is.null(feature_groups)) {
+    if (is.null(feature_id_map)) {
+      stop("feature_groups needs feature_id_column naming a column of peak_table")
+    }
+    if (!all(c("feature_id", "group") %in% colnames(feature_groups))) {
+      stop("feature_groups needs columns feature_id and group")
+    }
+    if (anyDuplicated(feature_groups$feature_id) > 0) {
+      stop("feature_groups has duplicated feature_id values")
+    }
+    if (anyNA(feature_groups$group)) {
+      stop(sum(is.na(feature_groups$group)), " feature_groups rows have no group (NA)")
+    }
+    peak_group <- feature_groups$group[match(feature_id_map[[feature_id_column]], feature_groups$feature_id)]
+    if (anyNA(peak_group)) {
+      stop(sum(is.na(peak_group)), " peaks have no group in feature_groups")
+    }
+  }
+
   # Create output directory if it doesn't exist
   if (!dir.exists(outloc)) {
     dir.create(outloc, recursive = TRUE)
@@ -369,26 +405,40 @@ advanced_annotation <- function(peak_table,
   peak_correlation_matrix <- compute_peak_correlations(peak_intensity_matrix, correlation_method = "p")
   # ----------------------------
 
-  # Tool 4: Compute peak modules
-  # ----------------------------
-  peak_modules <- compute_peak_modules(
-    peak_intensity_matrix = peak_intensity_matrix,
-    peak_correlation_matrix = peak_correlation_matrix,
-    correlation_threshold = correlation_threshold,
-    deep_split = deep_split,
-    min_cluster_size = min_cluster_size,
-    network_type = network_type,
-    seed = clustering_seed
-  )
-  # ----------------------------
+  if (is.null(peak_group)) {
+    # Tool 4: Compute peak modules
+    # ----------------------------
+    peak_modules <- compute_peak_modules(
+      peak_intensity_matrix = peak_intensity_matrix,
+      peak_correlation_matrix = peak_correlation_matrix,
+      correlation_threshold = correlation_threshold,
+      deep_split = deep_split,
+      min_cluster_size = min_cluster_size,
+      network_type = network_type,
+      seed = clustering_seed
+    )
+    # ----------------------------
 
-  # Tool 5: Compute rt modules
-  # ----------------------------
-  peak_rt_clusters <- compute_rt_modules(
-    peak_table = inner_join(peak_table, peak_modules, by = "peak"),
-    peak_width = peak_rt_width
-  )
-  
+    # Tool 5: Compute rt modules
+    # ----------------------------
+    peak_rt_clusters <- compute_rt_modules(
+      peak_table = inner_join(peak_table, peak_modules, by = "peak"),
+      peak_width = peak_rt_width
+    )
+  } else {
+    # Tools 4-5 replaced by feature_groups: one module per group, one RT cluster
+    # ----------------------------
+    stopifnot(identical(as.integer(colnames(peak_intensity_matrix)), peak_table$peak))
+    peak_rt_clusters <- tibble(
+      peak = peak_table$peak,
+      mean_intensity = colMeans(peak_intensity_matrix),
+      module = as.integer(factor(peak_group)),
+      rt_cluster = 1L
+    )
+    cat(sprintf("feature_groups: %d peaks in %d groups (WGCNA modules and RT clusters not computed)\n",
+                nrow(peak_rt_clusters), length(unique(peak_rt_clusters$module))))
+  }
+
   # Step can be done in Galaxy using the cut and join tools
   # ----------------------------
   annotation <- inner_join(annotation,
