@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Fixed
+- Adduct table (`sample_adduct_table`, `adduct_table`, test-data copy) corrected (1.2.1): water-loss masses (`M+H-H2O`, `M+H-2H2O`, `2M+3H2O+2H`, `M-H2O-H`, 0.55-1.77 mDa off) and the charges of `M+2K+H` (3) and `M+IsoProp+Na+H` (2); water-loss values in `docs/xMSannotator_Input_Formats.md`. See `NEWS.md`. (2026-11-05)
+
 ### Added
 - `advanced_annotation(feature_groups = )` (1.2.0): precomputed feature groups (e.g. HighResolutionExposomics_Workflow Step 1 Stage 3, v1.7.0+) replace WGCNA modules and RT clusters. Both runscripts read the Step 1 groups file (the Example Runscript through `feature_groups_path`) and set `filter_by` M+H / M-H, weight 5, 1.5 ppm mass and isotope tolerance and 2.5 s time tolerance; `run_CLUES_xMSannotator.sh` comments describe the groups file and memory use. Documentation updated: `readme.md`, `docs/README.md`, `docs/xMSannotator_Workflow.md` (new section "Precomputed feature groups"), `docs/xMSannotator_Input_Formats.md`, `docs/advanced_annotation_input_formatting.md` (new Section 4, Feature Groups; feature table columns of Step 1 v1.6.0+), `docs/Stage5_Output_Reference.md`. (2026-10-22)
 

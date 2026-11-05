@@ -275,7 +275,7 @@ expected_mz = (factor × monoisotopic_mass + mass) / |charge|
 
 ```r
 adduct_table <- data.frame(
-  adduct = c("M+H", "M+Na", "M+K", "M+NH4", "M-H", "M+Cl", "M+FA-H", "2M+H", "M-H2O+H"),
+  adduct = c("M+H", "M+Na", "M+K", "M+NH4", "M-H", "M+Cl", "M+FA-H", "2M+H", "M+H-H2O"),
   charge = c(1L, 1L, 1L, 1L, -1L, -1L, -1L, 1L, 1L),
   factor = c(1L, 1L, 1L, 1L, 1L, 1L, 1L, 2L, 1L),
   mass = c(
@@ -287,7 +287,7 @@ adduct_table <- data.frame(
     34.969402,   # M+Cl: +chloride
     44.998201,   # M+FA-H: +formate -H
     1.007276,    # 2M+H: dimer + proton
-    -17.026549   # M-H2O+H: water loss + proton
+    -17.003289   # M+H-H2O: water loss + proton
   )
 )
 ```
@@ -296,10 +296,10 @@ adduct_table <- data.frame(
 
 ```r
 adduct_table_pos <- data.frame(
-  adduct = c("M+H", "M+Na", "M+K", "M+NH4", "2M+H", "M-H2O+H"),
+  adduct = c("M+H", "M+Na", "M+K", "M+NH4", "2M+H", "M+H-H2O"),
   charge = c(1L, 1L, 1L, 1L, 1L, 1L),
   factor = c(1L, 1L, 1L, 1L, 2L, 1L),
-  mass = c(1.007276, 22.989218, 38.963158, 18.033823, 1.007276, -17.026549)
+  mass = c(1.007276, 22.989218, 38.963158, 18.033823, 1.007276, -17.003289)
 )
 ```
 
@@ -310,7 +310,7 @@ adduct_table_neg <- data.frame(
   adduct = c("M-H", "M+Cl", "M+FA-H", "M-H2O-H", "2M-H"),
   charge = c(-1L, -1L, -1L, -1L, -1L),
   factor = c(1L, 1L, 1L, 1L, 2L),
-  mass = c(-1.007276, 34.969402, 44.998201, -19.01839, -1.007276)
+  mass = c(-1.007276, 34.969402, 44.998201, -19.017841, -1.007276)
 )
 ```
 
@@ -326,8 +326,8 @@ adduct_table_neg <- data.frame(
 | M+Cl | +34.969402 | Negative |
 | M+FA-H | +44.998201 | Negative |
 | M+ACN+H | +42.033823 | Positive |
-| M-H2O+H | -17.026549 | Positive |
-| M-H2O-H | -19.01839 | Negative |
+| M+H-H2O | -17.003289 | Positive |
+| M-H2O-H | -19.017841 | Negative |
 
 ---
 

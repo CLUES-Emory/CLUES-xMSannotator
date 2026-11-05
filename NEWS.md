@@ -1,3 +1,48 @@
+# CLUES.xMSannotator 1.2.1
+
+## Bug fixes
+
+* Adduct table corrected (`sample_adduct_table` in `R/sysdata.rda`, the
+  default of `advanced_annotation()` and `get_default_adduct_table()`; the
+  exported `adduct_table` dataset; `tests/testthat/test-data/adduct_table.parquet`).
+  The values come from xMSannotator 1.3.2 unchanged. Every `mass` recomputed
+  from the adduct formula (enviPat 2.6 monoisotopic masses, proton 1.007276;
+  same values as HighResolutionExposomics_Workflow 7-Data_Annotation 0.3.0,
+  `LC-HRMS/adduct_table.csv`):
+  * `M+H-H2O` -17.0027 -> -17.003289 (the old value is the OH radical mass,
+    without the electron left by the proton), `M+H-2H2O` -35.012676 -> -35.013853
+    and `2M+3H2O+2H` 56.04448 -> 56.046246 (water taken as 17.0027 + proton =
+    18.009976 instead of 18.010565), `M-H2O-H` -19.01839 -> -19.017841 (the
+    hydrogen atom subtracted instead of the proton). Errors of 0.55-1.77 mDa, about
+    3-5 ppm at m/z 150-200.
+  * `charge` of `M+2K+H` 1 -> 3 and of `M+IsoProp+Na+H` 1 -> 2 (their masses
+    were already those of the 3+ and 2+ ions).
+  * 64 other masses change by <= 0.012 mDa (rounding).
+* `docs/xMSannotator_Input_Formats.md`: the custom adduct-table examples gave
+  `M-H2O+H` -17.026549 (the mass of NH3, not of water); now `M+H-H2O`
+  -17.003289, the package's name, so `remove_water_adducts()` recognises it.
+  `M-H2O-H` -19.01839 -> -19.017841.
+* `test-data/simple_annotation_sample/expected.parquet` regenerated with the
+  corrected table (729 -> 907 rows; the 705 rows of unchanged adducts are the
+  same apart from `expected_mass` moving by <= 9e-6 Da).
+
+## Effect on results
+
+Results are not comparable with 1.2.0 runs that search a water-loss adduct.
+Both CLUES runscripts search `M+H-H2O` (positive) and `M-H2O-H` (negative).
+Measured with the MultiDB runscript on CLU0127 C18 (confirmed library as
+database, Step 1 Stage 3 groups, 1.5 ppm; 5-Test_Output run 56):
+
+* Stage 1 water-loss matches 144 -> 693 (C18pos) and 59 -> 578 (C18neg); the
+  old 0.55-0.59 mDa error exceeds 1.5 ppm below m/z ~390, so low-mass
+  water-loss ions were not found before. Matches of the other adducts unchanged.
+* The true compound ranks first at 164 / 208 (was 165) and 191 / 256 (was 198)
+  confirmed features; precision of Confidence >= 2 annotations 0.553 (was 0.607)
+  and 0.529 (was 0.537). Most of the change: the water-loss ion of a compound
+  has the same formula as the [M+H]+ / [M-H]- of a compound with one H2O less
+  (malic / fumaric acid, cis-aconitic / 2,5-furandicarboxylic acid), which mass
+  cannot separate; the old error kept them about 3 ppm apart.
+
 # CLUES.xMSannotator 1.2.0
 
 ## New features
