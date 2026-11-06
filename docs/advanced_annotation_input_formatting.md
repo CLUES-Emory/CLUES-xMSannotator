@@ -6,13 +6,14 @@
 
 ## Overview
 
-CLUES.xMSannotator requires three input files:
+CLUES.xMSannotator requires three input files, plus one optional file:
 
 1. **Feature table** — XCMS peak-detection output (tab-delimited .txt)
 2. **Sample mapfile** — sample metadata for blank identification (tab-delimited .txt)
 3. **Compound database** — target compounds for annotation (.xlsx)
+4. **Feature groups** (optional, recommended) — Step 1 Stage 3 output (tab-delimited .txt), used instead of xMSannotator's WGCNA clustering
 
-Before annotation, the Example Runscript applies pre-processing steps: blank sample removal, fold-change filtering, and peak table construction. This document describes each file format and the pre-processing logic.
+Before annotation, the Example Runscript applies pre-processing steps: feature selection (feature groups, or else fold-change filtering), blank sample removal, and peak table construction. This document describes each file format and the pre-processing logic.
 
 For the full API-level input format specification (compound table, peak table, adduct table, etc.), see [`xMSannotator_Input_Formats.md`](xMSannotator_Input_Formats.md).
 
@@ -40,12 +41,13 @@ The remaining columns are specific to our XCMS QA pipeline output and are **not 
 
 | Category | Example Columns | Description |
 |----------|-----------------|-------------|
-| **XCMS peak statistics** | `mzmin`, `mzmax`, `rtmin`, `rtmax`, `n_peaks`, `n_detected`, `n_filled`, `rt_range`, `mz_range_ppm`, `int_cv` | Peak detection and alignment metrics |
-| **QA scores** | `peak_quality`, `alignment_score`, `combined_score`, `quality_category`, `m_selectivity`, `c_selectivity`, `peak_shape`, `passed_filter` | Quality assessment from XCMS QA filtering |
-| **Blank/detection stats** | `Water_fc`, `Water_status`, `Overall_detect_pct`, `Blank_detect_pct`, `Water_detect_pct`, `NIST_detect_pct`, `AMAP_detect_pct`, `PFAS_QAQC_detect_pct`, `HRE_Pool_detect_pct`, `Study_Sample_detect_pct` | Fold-change vs blanks, detection percentages by sample type |
-| **CV columns** | `HRE.p1Std._CV`, `HRE.p2Std._CV`, `Study_Sample_CV` | Coefficient of variation (study-specific, columns vary) |
+| **XCMS peak statistics** | `mzmin`, `mzmax`, `rtmin`, `rtmax`, `n_detected`, `n_filled`, `rt_range_10_90`, `mz_range_ppm`, `median_snr_asari`, `frac_no_baseline`, `median_dppm`, `median_width`, `median_n_scans` | Peak detection and alignment metrics |
+| **Blank/detection stats** | `Water_fc`, `Water_status`, `Overall_detected_pct`, `Overall_nonzero_pct`, `{type}_detected_pct` and `{type}_nonzero_pct` per sample type (e.g. `Study_Sample_detected_pct`, `HRE_Pool_nonzero_pct`) | Fold-change vs blanks, detection percentages (detected peak / non-zero value) by sample type |
+| **CV columns** | `HRE.p1Std_CV`, `HRE.p2Std_CV`, `Study_Sample_CV` | Coefficient of variation (study-specific, columns vary) |
 
-**Note:** If your feature table includes a fold-change column (any column ending in `_fc`, e.g., `Water_fc`), it is used by the pre-processing fold-change filter (Section 4.1) but is not passed to `advanced_annotation()`.
+Column names above are those of Step 1 v1.6.0+ (checked on a v1.7.0 table). Earlier versions used `n_peaks`, `rt_range`, `int_cv`, QA scores (`peak_quality`, `alignment_score`, `combined_score`, `quality_category`, `m_selectivity`, `c_selectivity`, `peak_shape`, `passed_filter`) and `*_detect_pct`; the runscripts' metadata joins accept both sets.
+
+**Note:** If your feature table includes a fold-change column (any column ending in `_fc`, e.g., `Water_fc`), it is used by the pre-processing fold-change filter (Section 5.1, only when no feature groups are given) but is not passed to `advanced_annotation()`.
 
 ### Example (first 3 rows, abbreviated)
 
@@ -60,7 +62,7 @@ F00005      85.02832  11.58  85.0283   85.02834  ...  44.460    ...  149682.33  
 
 - Only `mz`, `time`, and sample intensity columns are extracted for the peak table passed to `advanced_annotation()`. All other columns remain in the feature table for post-processing use.
 - The retention time column is named **`time`**, not `rt`. The runscript renames it to `rt` during peak table construction (required by `advanced_annotation()`).
-- The `Water_fc` column (or any column ending in `_fc`) is used by the pre-processing fold-change filter, not by annotation itself.
+- The `Water_fc` column (or any column ending in `_fc`) is used by the pre-processing fold-change filter when no feature groups are given, not by annotation itself.
 - Sample intensity column names must match the `File.Name` column in the mapfile (after hyphen-to-dot replacement).
 
 ---
@@ -130,13 +132,29 @@ This means the xlsx columns must be in the order: identifier, name, formula, mas
 
 ---
 
-## 4. Pre-Processing Steps
+## 4. Feature Groups (Step 1 Stage 3)
+
+**Format:** Tab-delimited .txt written by HighResolutionExposomics_Workflow Step 1 v1.7.0+ at `{output_dir}/{mode}/3-{mode}_{study}_Feature_Grouping/{mode}-{study}_Feature_Groups.txt`.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `feature_id` | character | Matches `feature_id` in the feature table |
+| `mz`, `time`, `rtmin`, `rtmax` | numeric | Copied from the feature table |
+| `feature_group` | integer | Group of features from one compound (Markov clustering of RT and intensity-correlation similarity), numbered by the RT of each group's first feature |
+
+Step 1 writes only features with `Water_fc` above its `feature_grouping: blank_fc_threshold` (5 by default; features with no fold change, from a run without blank injections, are kept), so the file's feature IDs are the feature set for annotation. Both runscripts read it, pass `feature_id` and `feature_group` (as `group`) to `advanced_annotation(feature_groups = )`, and add `feature_group` to the exported table. The MultiDB runscript finds the file from `output_base_loc`, `lc_mode` and `study_id`; the Example Runscript takes `feature_groups_path`.
+
+---
+
+## 5. Pre-Processing Steps
 
 The Example Runscript (`xMSannotator_CLUES_Runscript_Example.R`, Section 3) applies three pre-processing steps before calling `advanced_annotation()`.
 
-### 4.1 Fold-Change Filtering
+### 5.1 Feature Selection: Feature Groups or Fold-Change Filtering
 
-Removes features with low fold-change relative to blanks.
+With `feature_groups_path` set, the features in the groups file are kept and `fc_threshold` is not applied (Step 1 has already applied the blank fold-change filter). The runscript stops if a group file feature is missing from the feature table, and logs `Feature set from Step 1 Stage 3: <n> features in <n> groups`.
+
+Without feature groups (`feature_groups_path <- NULL`, or Step 1 output before v1.7.0 in the MultiDB runscript), the fold-change filter below removes features with low fold-change relative to blanks, and `advanced_annotation()` computes WGCNA modules.
 
 **Configuration:**
 - `fc_threshold <- 5` — minimum fold-change to retain a feature
@@ -145,7 +163,13 @@ Removes features with low fold-change relative to blanks.
 **Logic:**
 
 ```r
-if (!is.null(fc_threshold)) {
+feature_groups <- NULL
+if (!is.null(feature_groups_path)) {
+  feature_groups <- data.table::fread(feature_groups_path, data.table = FALSE,
+                                      colClasses = list(character = "feature_id"))
+  feature_groups <- data.frame(feature_id = feature_groups$feature_id, group = feature_groups$feature_group)
+  feature_table <- feature_table[feature_table[[feature_id_column]] %in% feature_groups$feature_id, ]
+} else if (!is.null(fc_threshold)) {
   fc_col <- grep("_fc$", colnames(feature_table), ignore.case = TRUE, value = TRUE)
   if (length(fc_col) == 1) {
     feature_table <- feature_table[feature_table[[fc_col]] >= fc_threshold, ]
@@ -155,6 +179,8 @@ if (!is.null(fc_threshold)) {
 }
 ```
 
+(abbreviated: the runscript also checks `feature_id_column` and that every group file feature is in the feature table)
+
 **Behavior:**
 - Searches for columns ending in `_fc` (e.g., `Water_fc`)
 - If exactly 1 match: filters rows where fold-change >= threshold
@@ -162,7 +188,7 @@ if (!is.null(fc_threshold)) {
 - If 0 matches: no filtering (passes silently)
 - **To skip:** set `fc_threshold <- NULL`
 
-### 4.2 Blank Sample Removal
+### 5.2 Blank Sample Removal
 
 Removes blank/control sample columns so they are not included in annotation.
 
@@ -193,7 +219,7 @@ sample_cols <- intersect(sample_names, colnames(feature_table))
 4. Intersect remaining names with feature table columns to get `sample_cols`
 5. Report any mapfile samples not found in the feature table
 
-### 4.3 Peak Table Construction
+### 5.3 Peak Table Construction
 
 Builds the peak table that `advanced_annotation()` expects.
 
@@ -229,5 +255,5 @@ peak_table <- unique(peak_table)
 ---
 
 *Document created: 2026-01-22*
-*Last updated: 2026-03-14*
-*For use with CLUES.xMSannotator v1.0.0*
+*Last updated: 2026-10-22*
+*For use with CLUES.xMSannotator v1.2.0*

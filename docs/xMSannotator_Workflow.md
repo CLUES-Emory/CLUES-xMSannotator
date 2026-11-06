@@ -11,6 +11,7 @@ by Karan Uppal (Emory University). Key modifications in this fork include:
 
 - Evidence ceiling (Approach C) for post-hoc confidence adjustment
 - WGCNA module and RT coherence filtering
+- Precomputed feature groups (`feature_groups`, 1.2.0), e.g. from HighResolutionExposomics_Workflow Step 1 Stage 3, in place of WGCNA modules and RT clusters
 - Support for `boosted_compounds` (user-verified standards → Confidence 4)
 - Multi-evidence chemical scoring with isotope, adduct, and correlation weighting
 - Intermediate stage output files (`Stage1_*.txt` through `Stage4b_*.txt`) for inspection. `Stage4b_confidence_levels.txt` is the canonical final output; `Stage5_curated_results.txt` is written only when `redundancy_filtering = TRUE` (opt-in).
@@ -53,6 +54,8 @@ annotation <- advanced_annotation(
 )
 ```
 
+This example uses the package defaults (5 ppm, 10 s, equal adduct weights). The shipped runscripts use `mass_tolerance` and `isotope_mass_tolerance` 1.5e-6, `time_tolerance` 2.5, `filter_by` M+H / M-H with weight 5 on M+H / M-H, and the Step 1 feature groups (`feature_groups`); see `inst/scripts/xMSannotator_CLUES_Runscript_Example.R`.
+
 After a successful run, the output directory will contain tab-delimited text files for each pipeline stage: `Stage1_mass_matched.txt`, `Stage1_peak_clusters.txt`, `Stage2_isotope_detection.txt`, `Stage3_chemical_scores.txt`, a Stage 3 pathway file, `Stage4a_confidence_levels.txt`, and `Stage4b_confidence_levels.txt`. `Stage4b_confidence_levels.txt` is the primary output — each row is a putative annotation with a confidence level (0–4) backed by the full evidence basis used to compute it.
 
 `Stage5_curated_results.txt` is produced only when `redundancy_filtering = TRUE` (opt-in). Stage 5 resolves multi-match features to a single compound per `(mz, time)` by deleting losing-compound rows; this is convenient for a one-row-per-peak view but discards the secondary adduct and isotope rows that contributed to other compounds' confidence values. For confidence-faithful downstream analysis, prefer Stage 4b.
@@ -65,7 +68,7 @@ The pipeline runs seven processing steps in sequence. Each step consumes upstrea
 
 1. **Stage 1 — Mass Matching.** Finds all compound–adduct combinations whose expected m/z falls within tolerance of each detected feature. Consumes the peak table, compound database, and adduct table. Produces `Stage1_mass_matched.txt` and `Stage1_peak_clusters.txt`.
 
-2. **Stage 1.5 — Peak Correlation & Module Detection.** Groups features into co-abundance modules using WGCNA, then sub-clusters each module by retention time. Consumes the peak intensity matrix. Module and RT cluster assignments are written to `Stage1_peak_clusters.txt`.
+2. **Stage 1.5 — Peak Correlation & Module Detection.** Groups features into co-abundance modules using WGCNA, then sub-clusters each module by retention time. Consumes the peak intensity matrix. Module and RT cluster assignments are written to `Stage1_peak_clusters.txt`. When `feature_groups` is given, WGCNA and RT clustering are skipped: each group is one module with RT cluster 1 (see [Precomputed feature groups](#precomputed-feature-groups-feature_groups)).
 
 3. **Stage 2 — Isotope Detection.** Searches for isotopic peaks (M+1, M+2, ...) matching each annotation's theoretical isotope envelope. Consumes Stage 1 annotations joined with module/RT assignments. Produces `Stage2_isotope_detection.txt`.
 
@@ -203,6 +206,19 @@ Within each module, peaks are further sub-grouped by retention time using kernel
 3. **Nearest-neighbor assignment** — `RANN::nn2()` assigns each peak to its nearest RT cluster center.
 
 **Output:** `Stage1_peak_clusters.txt` — each peak tagged with `module`, `rt_cluster`, and the combined identifier `Module_RTclust` (e.g., "110_3").
+
+### Precomputed feature groups (`feature_groups`)
+
+**Added in 1.2.0.** `feature_groups` takes a data frame with columns `feature_id` (values of the `feature_id_column` of the peak table) and `group`. When it is given, Steps B and C are skipped:
+
+- each group becomes one module (`module = as.integer(factor(group))`) and every peak gets `rt_cluster = 1`, so `Module_RTclust` is "<module>_1";
+- the correlation matrix (Step A) is still computed, because Stage 3 scoring uses it;
+- `deep_split`, `min_cluster_size`, `network_type`, `peak_rt_width` and `clustering_seed` have no effect; `correlation_threshold` still applies in Stage 3 scoring;
+- isotope candidates (Stage 2) must share the `rt_cluster` and lie within `time_tolerance`; with every `rt_cluster` 1, only the time window applies.
+
+Requirements, each checked with an error: `feature_id_column` must be set; `feature_groups` must have columns `feature_id` and `group`; no duplicated `feature_id`; no `NA` group; every peak in the peak table must have a group.
+
+The groups written by HighResolutionExposomics_Workflow Step 1 Stage 3 (v1.7.0+; Markov clustering of RT and intensity-correlation similarity) are `3-{mode}_{study}_Feature_Grouping/{mode}-{study}_Feature_Groups.txt`, with columns `feature_id`, `mz`, `time`, `rtmin`, `rtmax`, `feature_group`; pass `feature_id` and `feature_group` (renamed `group`). Both shipped runscripts do this. On CLU0127 (about 10,000 features x 347 injections) a run with the groups took under 1 min and about 4 GB, against 11-17 min and about 10 GB with WGCNA; precision against the CLUES confirmed library differed by at most 0.01 between the two.
 
 ---
 
@@ -380,7 +396,7 @@ The final chemical score of ~45,333 places this annotation firmly in the "strong
 **Files:** `R/multilevelannotationstep3.R`, `R/compute_pathways.R`
 
 > **Key questions this stage answers:**
-> Are the annotated compounds over-represented in known biological pathways? Does the co-location of pathway members within the same WGCNA module suggest a real biological signal rather than random matches?
+> Are the annotated compounds over-represented in known biological pathways? Does the co-location of pathway members within the same module (WGCNA module or feature group) suggest a real biological signal rather than random matches?
 
 ### Theory
 
@@ -403,7 +419,7 @@ Fisher's exact test is applied. **Threshold: p ≤ 0.05.**
 
 **Level 2: Module-pathway overlap** (line 115–124)
 
-For pathways passing Level 1, tests whether pathway compounds are co-located within the same WGCNA/RT module more than expected by chance. This is a second 2×2 contingency table comparing the dominant module against all other modules.
+For pathways passing Level 1, tests whether pathway compounds are co-located within the same module (WGCNA/RT module, or feature group when `feature_groups` is given) more than expected by chance. This is a second 2×2 contingency table comparing the dominant module against all other modules.
 
 **Threshold: p ≤ 0.2** (more permissive, since modules are smaller subsets).
 
@@ -485,7 +501,7 @@ IF RT spread > max.rt.diff:
   Re-cluster rows by RT → keep the best cluster
   (continue evaluation with filtered rows)
 
-IF features span multiple WGCNA modules:
+IF features span multiple modules (WGCNA modules or feature groups):
   IF score < 10
     → CONFIDENCE 0 (None)
   IF score > 10 AND has filter_by match
@@ -549,7 +565,7 @@ Enforces hard evidence ceilings. Can both **raise** (rescue Level 0) and **lower
 
 Two requirements for a compound's rows to be "coherent":
 
-1. **Module coherence** — all rows must share the same WGCNA module
+1. **Module coherence** — all rows must share the same module (WGCNA module, or feature group when `feature_groups` is given)
 2. **RT coherence** — RT range (max − min) must be ≤ `max.rt.diff` seconds
 
 For compounds split across modules, only the rows from the **largest module group** are kept. This prevents minority stray rows from degrading confidence.
@@ -624,7 +640,7 @@ Each feature in the final output receives a `MatchCategory` label:
 | Stage | File | Description |
 |-------|------|-------------|
 | 1 | `Stage1_mass_matched.txt` | Raw mass matching results (all putative adduct annotations) |
-| 1 | `Stage1_peak_clusters.txt` | Peak module and RT cluster assignments |
+| 1 | `Stage1_peak_clusters.txt` | Peak module and RT cluster assignments (from `feature_groups` when given) |
 | 2 | `Stage2_isotope_detection.txt` | Annotations expanded with detected isotope rows |
 | 3 | `Stage3_chemical_scores.txt` | Chemical scores from multi-evidence evaluation |
 | 3b | `Stage3_HMDB_pathways.txt` | Pathway-enriched scores (HMDB mode) |
@@ -644,19 +660,20 @@ Before diving into the full parameter reference table, use the sections below to
 
 ### Adjust for your instrument
 
-- **`mass_tolerance`** — Decrease to 2–3 ppm for Orbitrap and other high-resolution instruments where mass accuracy is tight. Increase to 10–15 ppm for QTOF or lower-resolution instruments where wider windows are needed to capture true matches.
+- **`mass_tolerance`** — Decrease to 2–3 ppm for Orbitrap and other high-resolution instruments where mass accuracy is tight. On CLU0127 (Orbitrap Exploris 120) 1–1.5 ppm gave the best precision against the CLUES confirmed library, and the shipped runscripts use 1.5 ppm (`isotope_mass_tolerance` too) with `time_tolerance` 2.5 s; measure your own instrument's error first. Increase to 10–15 ppm for QTOF or lower-resolution instruments where wider windows are needed to capture true matches.
 - **`adduct_table`** — Filter the default 110-adduct table down to adducts relevant to your ionization mode and chromatographic conditions. Running positive-mode C18 data against all 110 adducts (including negative-mode and exotic species) generates unnecessary false matches.
 
 ### Adjust for your study design
 
 - **`n_workers`** — Set to the number of available CPU cores minus one; more cores speed up the WGCNA module detection step, which is the most computationally expensive part of the pipeline.
+- **`feature_groups`** — Pass precomputed feature groups (Step 1 Stage 3) when annotating against several databases: the grouping is computed once per study and mode instead of once per database run, and the WGCNA step is skipped.
 - **`pathway_mode`** — Use `"HMDB"` for human metabolomics studies where compound IDs are HMDB identifiers. Use `"custom"` with your own pathway table for non-HMDB databases (e.g., pesticide libraries, plant metabolite databases). Use `"skip"` for exposomics or targeted panels where pathway enrichment is not meaningful.
 - **`boosted_compounds`** — Provide a data frame of verified standards (compound IDs with known m/z and RT) to anchor confidence calibration; these are elevated to Confidence 4 and serve as positive controls in your results.
 
 ### Tune if results look wrong
 
-- **`correlation_threshold`** — Decrease to 0.5–0.6 if WGCNA produces too few modules (most features land in a single module). Increase to 0.8–0.9 if modules are too large and mix unrelated features.
-- **`min_cluster_size`** — Decrease below 10 if small datasets produce too few modules. Increase above 10 to reduce noise modules in large studies with thousands of features.
+- **`correlation_threshold`** — (WGCNA path) Decrease to 0.5–0.6 if WGCNA produces too few modules (most features land in a single module). Increase to 0.8–0.9 if modules are too large and mix unrelated features.
+- **`min_cluster_size`** — (WGCNA path; ignored with `feature_groups`) Decrease below 10 if small datasets produce too few modules. Increase above 10 to reduce noise modules in large studies with thousands of features.
 - **`time_tolerance`** — Decrease below 10 seconds for narrow chromatographic peaks (e.g., UHPLC C18). Increase above 10 seconds for broad peaks or HILIC separations where co-eluting adducts span a wider RT range.
 - **`intensity_deviation_tolerance`** — Increase to 0.2–0.3 for noisy or low-abundance data where isotope intensity ratios are imprecise. Decrease to 0.05 for clean data from standards or high-abundance metabolites.
 - **`filter_by`** — Set to the expected primary adduct for your ionization mode (`"M+H"` for positive, `"M-H"` for negative) to gate confidence levels. Set to `NULL` for unbiased scoring where no single adduct is expected to dominate.
@@ -671,12 +688,13 @@ Before diving into the full parameter reference table, use the sections below to
 |-----------|---------|:-----:|-------------|
 | `mass_tolerance` | 5e-6 (5 ppm) | 1 | Relative mass tolerance for adduct matching |
 | `adduct_table` | 110 built-in adducts | 1 | Adduct definitions (charge, factor, mass) |
-| `feature_id_column` | NULL | all | Column name for custom feature IDs to preserve in all stage outputs |
-| `correlation_threshold` | 0.7 | 1.5, 3 | Module merge threshold; minimum correlation for scoring evidence |
-| `deep_split` | 2 | 1.5 | WGCNA tree cutting depth (0=conservative, 4=aggressive) |
-| `min_cluster_size` | 10 | 1.5 | Minimum peaks per WGCNA module |
-| `network_type` | "unsigned" | 1.5 | WGCNA network topology type |
-| `peak_rt_width` | 1 | 1.5 | Gaussian KDE bandwidth for RT clustering (seconds) |
+| `feature_id_column` | NULL | all | Column name for custom feature IDs to preserve in all stage outputs (required with `feature_groups`) |
+| `feature_groups` | NULL | 1.5 | Precomputed groups (`feature_id`, `group`); replaces WGCNA modules and RT clusters (each group one module, RT cluster 1) |
+| `correlation_threshold` | 0.7 | 1.5, 3 | Module merge threshold (WGCNA only); minimum correlation for scoring evidence |
+| `deep_split` | 2 | 1.5 | WGCNA tree cutting depth (0=conservative, 4=aggressive); ignored with `feature_groups` |
+| `min_cluster_size` | 10 | 1.5 | Minimum peaks per WGCNA module; ignored with `feature_groups` |
+| `network_type` | "unsigned" | 1.5 | WGCNA network topology type; ignored with `feature_groups` |
+| `peak_rt_width` | 1 | 1.5 | Gaussian KDE bandwidth for RT clustering (seconds); ignored with `feature_groups` |
 | `intensity_deviation_tolerance` | 0.1 | 2 | Allowed deviation in isotope intensity ratio (10%) |
 | `mass_defect_tolerance` | 0.1 | 2 | Mass defect window (Da) |
 | `mass_defect_precision` | 0.01 | 2 | Bin width for mass defect calculation |
@@ -724,7 +742,7 @@ Before diving into the full parameter reference table, use the sections below to
 
 ---
 
-**Symptom:** All or most features are assigned to a single WGCNA module, and `Stage1_peak_clusters.txt` shows only one or two module numbers.
+**Symptom:** All or most features are assigned to a single WGCNA module, and `Stage1_peak_clusters.txt` shows only one or two module numbers. (With `feature_groups`, the modules are the groups given; check the Step 1 Stage 3 log line for the group count and largest group instead.)
 **Likely cause:** `correlation_threshold` is too low (modules that should be separate get merged) or `min_cluster_size` is too large (small modules are absorbed into larger ones).
 **Fix:** Increase `correlation_threshold` to 0.8 or 0.9 so only highly correlated features merge. Decrease `min_cluster_size` below 10 if your dataset has fewer features. Also check that the peak table has enough samples (columns) for meaningful correlation — WGCNA needs at least ~15–20 samples to produce stable modules.
 

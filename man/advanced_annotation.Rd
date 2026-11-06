@@ -40,9 +40,23 @@ advanced_annotation(
   multi_rt_clusters = FALSE,
   charge_type = NULL,
   clustering_seed = 12345,
+  feature_groups = NULL,
   outloc = tempdir(),
   n_workers = parallel::detectCores()
 )
+}
+\arguments{
+\item{feature_groups}{Optional data frame with columns \code{feature_id} and
+\code{group} (one row per feature), e.g. the Step 1 Stage 3 feature groups
+(\verb{*_Feature_Groups.txt}, column \code{feature_group} renamed to \code{group}).
+Requires \code{feature_id_column}; every peak must have a group. When given,
+WGCNA peak modules and retention-time clusters are not computed: each
+group becomes one module and every peak gets \code{rt_cluster} 1, so isotope
+candidates are limited by \code{time_tolerance} only. The correlation matrix is
+still computed for scoring. \code{correlation_threshold} still applies to
+scoring; \code{deep_split}, \code{min_cluster_size}, \code{network_type},
+\code{peak_rt_width} and \code{clustering_seed} are then unused. \code{NULL} (default)
+clusters as before.}
 }
 \description{
 Wrapper for the advanced annotation steps.

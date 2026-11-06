@@ -220,6 +220,36 @@ peak_table <- data.frame(
 
 When you specify `feature_id_column = "FeatureID"` in `advanced_annotation()`, this column will be included in all stage output files (Stage 1-5).
 
+### Optional: Precomputed Feature Groups
+
+`feature_groups` (1.2.0+) assigns each feature to a group of features from one compound, computed outside the package. The groups replace the WGCNA modules and RT clusters: each group becomes one module and every feature gets RT cluster 1. See [Precomputed feature groups](xMSannotator_Workflow.md#precomputed-feature-groups-feature_groups) for what changes downstream.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `feature_id` | character/numeric | Values of the peak table's `feature_id_column` (the column in `feature_groups` is always named `feature_id`) |
+| `group` | any | Group label; features with the same label form one module |
+
+Rules (each checked, with an error): `feature_id_column` must be set; no duplicated `feature_id`; no `NA` group; every peak in the peak table has a group. Groups may contain features that are not in the peak table.
+
+HighResolutionExposomics_Workflow Step 1 (v1.7.0+) writes these groups in Stage 3 as `3-{mode}_{study}_Feature_Grouping/{mode}-{study}_Feature_Groups.txt` (`feature_id`, `mz`, `time`, `rtmin`, `rtmax`, `feature_group`):
+
+```r
+groups <- data.table::fread("3-C18pos_MyStudy_Feature_Grouping/C18pos-MyStudy_Feature_Groups.txt",
+                            data.table = FALSE, colClasses = list(character = "feature_id"))
+feature_groups <- data.frame(feature_id = groups$feature_id, group = groups$feature_group)
+
+# Annotate the grouped features only
+peak_table <- peak_table[peak_table$feature_id %in% feature_groups$feature_id, ]
+
+annotation <- advanced_annotation(
+  peak_table        = peak_table,
+  compound_table    = compound_table,
+  feature_id_column = "feature_id",
+  feature_groups    = feature_groups,
+  ...
+)
+```
+
 ---
 
 ## 3. Adduct Table (Optional)
@@ -245,7 +275,7 @@ expected_mz = (factor × monoisotopic_mass + mass) / |charge|
 
 ```r
 adduct_table <- data.frame(
-  adduct = c("M+H", "M+Na", "M+K", "M+NH4", "M-H", "M+Cl", "M+FA-H", "2M+H", "M-H2O+H"),
+  adduct = c("M+H", "M+Na", "M+K", "M+NH4", "M-H", "M+Cl", "M+FA-H", "2M+H", "M+H-H2O"),
   charge = c(1L, 1L, 1L, 1L, -1L, -1L, -1L, 1L, 1L),
   factor = c(1L, 1L, 1L, 1L, 1L, 1L, 1L, 2L, 1L),
   mass = c(
@@ -257,7 +287,7 @@ adduct_table <- data.frame(
     34.969402,   # M+Cl: +chloride
     44.998201,   # M+FA-H: +formate -H
     1.007276,    # 2M+H: dimer + proton
-    -17.026549   # M-H2O+H: water loss + proton
+    -17.003289   # M+H-H2O: water loss + proton
   )
 )
 ```
@@ -266,10 +296,10 @@ adduct_table <- data.frame(
 
 ```r
 adduct_table_pos <- data.frame(
-  adduct = c("M+H", "M+Na", "M+K", "M+NH4", "2M+H", "M-H2O+H"),
+  adduct = c("M+H", "M+Na", "M+K", "M+NH4", "2M+H", "M+H-H2O"),
   charge = c(1L, 1L, 1L, 1L, 1L, 1L),
   factor = c(1L, 1L, 1L, 1L, 2L, 1L),
-  mass = c(1.007276, 22.989218, 38.963158, 18.033823, 1.007276, -17.026549)
+  mass = c(1.007276, 22.989218, 38.963158, 18.033823, 1.007276, -17.003289)
 )
 ```
 
@@ -280,7 +310,7 @@ adduct_table_neg <- data.frame(
   adduct = c("M-H", "M+Cl", "M+FA-H", "M-H2O-H", "2M-H"),
   charge = c(-1L, -1L, -1L, -1L, -1L),
   factor = c(1L, 1L, 1L, 1L, 2L),
-  mass = c(-1.007276, 34.969402, 44.998201, -19.01839, -1.007276)
+  mass = c(-1.007276, 34.969402, 44.998201, -19.017841, -1.007276)
 )
 ```
 
@@ -296,8 +326,8 @@ adduct_table_neg <- data.frame(
 | M+Cl | +34.969402 | Negative |
 | M+FA-H | +44.998201 | Negative |
 | M+ACN+H | +42.033823 | Positive |
-| M-H2O+H | -17.026549 | Positive |
-| M-H2O-H | -19.01839 | Negative |
+| M+H-H2O | -17.003289 | Positive |
+| M-H2O-H | -19.017841 | Negative |
 
 ---
 
@@ -672,27 +702,28 @@ The `advanced_annotation()` function accepts the following parameters:
 |-----------|------|---------|-------------|
 | `adduct_table` | data.frame | `NULL` | Table of adducts with name, factor, charge, and mass columns. Uses `sample_adduct_table` if NULL |
 | `adduct_weights` | data.frame | `NULL` | Weights for prioritizing specific adducts. Auto-generated with weight=5 if NULL |
-| `feature_id_column` | character | `NULL` | Name of column in peak_table containing custom feature identifiers to preserve in all stage outputs |
+| `feature_id_column` | character | `NULL` | Name of column in peak_table containing custom feature identifiers to preserve in all stage outputs. Required with `feature_groups` |
+| `feature_groups` | data.frame | `NULL` | Precomputed feature groups (`feature_id`, `group`) used instead of WGCNA modules and RT clusters; see Section 2, Optional: Precomputed Feature Groups |
 | `intensity_deviation_tolerance` | numeric | `0.1` | Tolerance for intensity deviation in isotope matching (10%) |
 | `mass_tolerance` | numeric | `5e-6` | Mass accuracy as fractional (relative) tolerance. Use `5e-6` for 5 ppm, `10e-6` for 10 ppm. Do NOT enter direct ppm values. |
 | `isotope_mass_tolerance` | numeric | `NULL` | Fractional tolerance for isotope m/z matching. Defaults to `mass_tolerance`. Use `5e-6` for 5 ppm. |
 | `mass_defect_tolerance` | numeric | `0.1` | In Da: how far the charge-corrected isotope spacing may sit from a whole isotope step. A cheap prefilter; `isotope_mass_tolerance` does the real work. **Units changed from binned mass-defect units to Da in 1.1.0**; values >= 0.5 disable the check and `compute_isotopes()` warns. The shipped runscripts use 0.02. |
 | `mass_defect_precision` | numeric | `0.01` | Precision for binning mass defects |
 | `time_tolerance` | numeric | `10` | Retention time tolerance in seconds |
-| `peak_rt_width` | numeric | `1` | Expected chromatographic peak width for RT clustering |
-| `correlation_threshold` | numeric | `0.7` | Minimum correlation for peak grouping |
+| `peak_rt_width` | numeric | `1` | Expected chromatographic peak width for RT clustering (ignored with `feature_groups`) |
+| `correlation_threshold` | numeric | `0.7` | Minimum correlation for peak grouping (WGCNA module merging) and for correlation evidence in scoring; only the scoring use applies with `feature_groups` |
 | `MplusH_abundance_ratio_check` | logical | `TRUE` | Requires secondary adducts to have lower intensity than M+H/M-H during chemical scoring. Set to FALSE to disable. |
 | `multimer_abundance_check` | logical | `TRUE` | Checks that multimer adducts (2M, 3M) have lower intensity than the monomer during confidence assignment. Set to FALSE to disable. |
-| `deep_split` | integer | `2` | WGCNA parameter controlling cluster splitting (0-4, higher = more clusters) |
-| `min_cluster_size` | integer | `10` | Minimum peaks per module in WGCNA clustering |
+| `deep_split` | integer | `2` | WGCNA parameter controlling cluster splitting (0-4, higher = more clusters); ignored with `feature_groups` |
+| `min_cluster_size` | integer | `10` | Minimum peaks per module in WGCNA clustering; ignored with `feature_groups` |
 | `maximum_isotopes` | integer | `10` | Maximum isotope peaks to consider per compound |
 | `min_ions_per_chemical` | integer | `2` | Minimum ions required to annotate a chemical |
 | `filter_by` | character vector | `NULL` | Primary adducts for confidence scoring. **Default changed from `c("M-H", "M+H")` to `NULL` on 2026-08-14** — naming a primary ion activates a stricter confidence regime, see below. |
 | `level1_primary_adducts` | character vector | `c("M+H", "M-H")` | Adducts that qualify for Confidence 1 as a single match in the evidence cap. Independent of `filter_by`. |
 | `multi_rt_clusters` | logical | `FALSE` | Annotate every retention-time cluster a compound matches, each with its own confidence, instead of choosing one. On CLU0009, recall of authentic-standard confirmed features rose from 30 to 55 of 72; output roughly doubles, almost entirely as Confidence 0. Untested with `redundancy_filtering = TRUE`. |
-| `clustering_seed` | integer | `12345` | RNG seed for peak-module clustering. `NULL` leaves the caller's random stream untouched. |
+| `clustering_seed` | integer | `12345` | RNG seed for peak-module clustering. `NULL` leaves the caller's random stream untouched. Ignored with `feature_groups`. |
 | `charge_type` | character | `NULL` | `"pos"` or `"neg"`. Drops compounds whose permanent `charge` has the opposite sign; neutrals are kept in both. `NULL` searches both polarities and warns if the database carries both signs. Does not affect adduct selection. |
-| `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid") |
+| `network_type` | character | `"unsigned"` | WGCNA network type ("unsigned", "signed", or "signed hybrid"); ignored with `feature_groups` |
 | `redundancy_filtering` | logical | `FALSE` | Opt-in Stage 5 multi-match resolution. `FALSE` (default) keeps `Stage4b_confidence_levels.txt` as the canonical final output, preserving the full evidence basis behind every confidence value. `TRUE` additionally writes `Stage5_curated_results.txt` with one row per `(mz, time)`; losing-compound rows (including their secondary adduct and isotope rows) are deleted, which can leave other rows of the same compound displaying confidence values computed from evidence no longer present in the file. |
 | `identify_isotopologues_flag` | logical | `TRUE` | Use enviPat to identify specific isotopologue substitutions (e.g., 13C:1 vs 15N:1) for isotope peaks. Adds `isotopologue` and `isotopologue_quality` columns to output. Requires `enviPat` package (listed in Imports; always installed with the package). |
 | `pathway_mode` | character | `"HMDB"` | Pathway matching mode: "HMDB" (default), "custom", or "skip" |
@@ -719,6 +750,13 @@ The `advanced_annotation()` function accepts the following parameters:
 > permissive regime the default: isotope evidence can now reach Confidence 3.
 > **Anything annotated before this date used the stricter regime and must be
 > re-run before its confidence levels are compared against new output.**
+>
+> **Runscripts changed again 2026-10-22 (1.2.0):** both shipped runscripts set
+> `filter_by` to `"M+H"` / `"M-H"` again, with adduct weight 5 on M+H / M-H,
+> `mass_tolerance` and `isotope_mass_tolerance` 1.5e-6 and `time_tolerance` 2.5.
+> The `advanced_annotation()` default stays `NULL`. The evidence (CLU0127 against
+> the CLUES confirmed library) is in the Section 5 and 6 comments of
+> `inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R`.
 
 `filter_by` names the primary ion(s). Whether it is set at all — not just which
 adducts it names — switches the confidence rules, via `filter_is_active` in

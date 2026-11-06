@@ -14,6 +14,12 @@
 #   Tasks 1..N     = Positive mode (one per database)
 #   Tasks N+1..2N  = Negative mode (one per database)
 #   N = number of databases in db_mapfile
+#
+# Feature grouping: output_dir is the Step 1 output_dir. When Step 1 v1.7.0+ has
+# written {mode}/3-{mode}_{study_id}_Feature_Grouping/{mode}-{study_id}_Feature_Groups.txt,
+# every task reads those groups (no WGCNA clustering; fc_threshold not applied).
+# Without the file (older Step 1 output) each task filters by fc_threshold and
+# runs WGCNA. The log line "Feature groups:" says which path was taken.
 #===============================================================================
 
 #-------------------------------------------------------------------------------
@@ -24,6 +30,8 @@
 #SBATCH --mail-user=<your-email@email.com>
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=10
+# Peak memory per task on CLU0127 (about 10,000 features x 350 injections, confirmed DB):
+# about 4 GB with the Step 1 feature groups, about 10 GB with WGCNA.
 #SBATCH --mem=128G
 #SBATCH --array=1-18
 #SBATCH --error=CLUES_xMSannotator_%A_%a.err
@@ -47,7 +55,7 @@ db_mapfile="/clues/.../Compound_Database_Mapfile_v3.xlsx"
 
 # Processing parameters
 n_cores=10                          # Must match --cpus-per-task
-fc_threshold=5
+fc_threshold=5                      # Water_fc >= threshold; used only without Step 1 feature groups
 blank_names="Water,Blank"           # Comma-separated
 
 # R script location. Do not change.

@@ -1,3 +1,93 @@
+# CLUES.xMSannotator 1.2.1
+
+## Bug fixes
+
+* Adduct table corrected (`sample_adduct_table` in `R/sysdata.rda`, the
+  default of `advanced_annotation()` and `get_default_adduct_table()`; the
+  exported `adduct_table` dataset; `tests/testthat/test-data/adduct_table.parquet`).
+  The values come from xMSannotator 1.3.2 unchanged. Every `mass` recomputed
+  from the adduct formula (enviPat 2.6 monoisotopic masses, proton 1.007276;
+  same values as HighResolutionExposomics_Workflow 7-Data_Annotation 0.3.0,
+  `LC-HRMS/adduct_table.csv`):
+  * `M+H-H2O` -17.0027 -> -17.003289 (the old value is the OH radical mass,
+    without the electron left by the proton), `M+H-2H2O` -35.012676 -> -35.013853
+    and `2M+3H2O+2H` 56.04448 -> 56.046246 (water taken as 17.0027 + proton =
+    18.009976 instead of 18.010565), `M-H2O-H` -19.01839 -> -19.017841 (the
+    hydrogen atom subtracted instead of the proton). Errors of 0.55-1.77 mDa, about
+    3-5 ppm at m/z 150-200.
+  * `charge` of `M+2K+H` 1 -> 3 and of `M+IsoProp+Na+H` 1 -> 2 (their masses
+    were already those of the 3+ and 2+ ions).
+  * 64 other masses change by <= 0.012 mDa (rounding).
+* `docs/xMSannotator_Input_Formats.md`: the custom adduct-table examples gave
+  `M-H2O+H` -17.026549 (the mass of NH3, not of water); now `M+H-H2O`
+  -17.003289, the package's name, so `remove_water_adducts()` recognises it.
+  `M-H2O-H` -19.01839 -> -19.017841.
+* `test-data/simple_annotation_sample/expected.parquet` regenerated with the
+  corrected table (729 -> 907 rows; the 705 rows of unchanged adducts are the
+  same apart from `expected_mass` moving by <= 9e-6 Da).
+
+## Effect on results
+
+Results are not comparable with 1.2.0 runs that search a water-loss adduct.
+Both CLUES runscripts search `M+H-H2O` (positive) and `M-H2O-H` (negative).
+Measured with the MultiDB runscript on CLU0127 C18 (confirmed library as
+database, Step 1 Stage 3 groups, 1.5 ppm; 5-Test_Output run 56):
+
+* Stage 1 water-loss matches 144 -> 693 (C18pos) and 59 -> 578 (C18neg); the
+  old 0.55-0.59 mDa error exceeds 1.5 ppm below m/z ~390, so low-mass
+  water-loss ions were not found before. Matches of the other adducts unchanged.
+* The true compound ranks first at 164 / 208 (was 165) and 191 / 256 (was 198)
+  confirmed features; precision of Confidence >= 2 annotations 0.553 (was 0.607)
+  and 0.529 (was 0.537). Most of the change: the water-loss ion of a compound
+  has the same formula as the [M+H]+ / [M-H]- of a compound with one H2O less
+  (malic / fumaric acid, cis-aconitic / 2,5-furandicarboxylic acid), which mass
+  cannot separate; the old error kept them about 3 ppm apart.
+
+# CLUES.xMSannotator 1.2.0
+
+## New features
+
+* `advanced_annotation()` gains `feature_groups`: a data frame of `feature_id`
+  and `group`, e.g. the feature groups written by Step 1 Stage 3
+  (HighResolutionExposomics_Workflow v1.7.0, `*_Feature_Groups.txt`). When
+  given, WGCNA peak modules and retention-time clusters are not computed: each
+  group is one module and every peak has `rt_cluster` 1, so isotope candidates
+  are limited by `time_tolerance` only. Needs `feature_id_column`; every peak
+  must have a group. On CLU0127 (about 10,000 features x 347 injections) a run
+  took about 30 s instead of 11-17 min, and precision against the confirmed
+  library differed by at most 0.01. `NULL` (default) leaves the output unchanged.
+
+## MultiDB runscript (`inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R`)
+
+Results are not comparable with runs made with the 1.1.0 runscript.
+
+* Reads the Step 1 Stage 3 feature groups when the file exists
+  (`3-<mode>_<study>_Feature_Grouping/<mode>-<study>_Feature_Groups.txt`); their
+  feature IDs then define the feature set and the `fc_threshold` argument is not
+  applied. Without the file, the fold-change filter and WGCNA run as before.
+* New defaults: `filter_by` M+H / M-H (was `NULL`), weight 5 for M+H / M-H
+  (was 1), `mass_tolerance` and `isotope_mass_tolerance` 1.5e-6 (were 5e-6 and
+  7.5e-6), `time_tolerance` 2.5 s (was 10). Chosen on CLU0127 C18pos/C18neg
+  against the CLUES confirmed library; the evidence is in the Section 5 and 6
+  comments.
+* Selects the `*_Untargeted_RAW_Feature_Table_*.txt` file in the Unadjusted
+  folder. Step 1 v1.3.2+ also writes the injection QC flags there, so the
+  previous `.txt` pattern passed two files to `fread()`, which failed.
+* Feature metadata columns in the exported table updated to Step 1 v1.6.0 names
+  (earlier names still used when present); adds `rtmin`, `rtmax` and
+  `feature_group`.
+
+## Example runscript and SLURM wrapper
+
+* `xMSannotator_CLUES_Runscript_Example.R`: new `feature_groups_path` (Step 1
+  Stage 3 groups file; `NULL` falls back to the `fc_threshold` filter and
+  WGCNA), and the MultiDB runscript's settings: `filter_by` M+H / M-H, weight 5,
+  1.5 ppm mass and isotope tolerance, 2.5 s, Step 1 v1.6.0 metadata columns.
+* `run_CLUES_xMSannotator.sh`: comments only (groups file, `fc_threshold` use,
+  memory per task).
+* Documentation: `feature_groups` in the Workflow reference, Input Formats,
+  pre-processing guide and Stage 5 reference; readme links `NEWS.md`.
+
 # CLUES.xMSannotator 1.1.0
 
 ## Results are not comparable with 1.0.0

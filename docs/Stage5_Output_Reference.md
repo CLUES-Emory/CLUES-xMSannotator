@@ -15,7 +15,7 @@
 | 1 | `compound_id` | character | Compound identifier from the database (e.g., "PEST3133"). If the database provides `compound_id`, those values flow through; otherwise auto-generated as "Formula_1", "Formula_2", etc. |
 | 2 | `Confidence` | integer (0–4) | Numeric confidence level from the evidence-based decision tree. See [Interpreting Confidence](#interpreting-confidence). |
 | 3 | `score` | numeric | Chemical score from multi-evidence evaluation — incorporates adduct count, correlation strength, isotope confirmation, RT scaling, and confidence-level boost. Higher = stronger evidence. See [Interpreting Score](#interpreting-score). |
-| 4 | `Module_RTclust` | character | Combined WGCNA module and RT cluster ID (e.g., "46_1" = module 46, RT cluster 1). Features sharing a `Module_RTclust` co-vary in intensity and co-elute. |
+| 4 | `Module_RTclust` | character | Combined WGCNA module and RT cluster ID (e.g., "46_1" = module 46, RT cluster 1). Features sharing a `Module_RTclust` co-vary in intensity and co-elute. With `feature_groups` (1.2.0+) the module is the feature group (`as.integer(factor(group))`; for a Step 1 groups file this equals `feature_group`, checked on CLU0127) and the RT cluster is always 1. |
 | 5 | `mz` | numeric | Observed mass-to-charge ratio of the detected feature. |
 | 6 | `time` | numeric | Retention time in seconds. |
 | 7 | `MatchCategory` | character | `"Unique"` = this m/z matched exactly one compound. `"Multiple"` = initially matched multiple compounds; the winner was retained after redundancy filtering. |
