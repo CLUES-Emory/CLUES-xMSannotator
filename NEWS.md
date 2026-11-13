@@ -1,3 +1,24 @@
+# CLUES.xMSannotator 1.3.0
+
+## Runscripts: output layout (no package code change)
+
+* MultiDB runscript output is one step folder per mode with one subfolder per
+  database: `<mode>/7-<mode>_<study>_xMSannotator/<File_name_out>/`. Before,
+  each database had its own `<mode>/7-<mode>_<study>_<DB>_CLUES_Annotation/`
+  folder (1.2.2). Each database folder holds:
+  * the xlsx (unchanged content);
+  * `run_info.txt`: database and METADATA files with md5, mapfile, inputs,
+    package / R / runscript versions, every setting, row counts and run time;
+  * `intermediate/`: the advanced_annotation() Stage files, gzipped after the
+    xlsx is written. Each original is removed only after its decompressed copy
+    is byte-identical.
+* Every task writes `<mode>-<study>_xMSannotator_README.md` in the step folder,
+  covering layout, files, databases, inputs, versions and settings. The content
+  is the same from every task of a mode, and it is written to a temporary file
+  and renamed.
+* The skip-if-exists check looks for the xlsx in the new location. Outputs in
+  the 1.2.2 layout are not detected or moved.
+
 # CLUES.xMSannotator 1.2.3
 
 ## Bug fixes

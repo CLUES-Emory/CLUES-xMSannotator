@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 # xMSannotator CLUES Multi-Database Annotation Pipeline
-# Version: 1.2.2 (CLUES.xMSannotator)
+# Version: 1.3.0 (CLUES.xMSannotator)
 # Author: CLUES Lab, Emory University
 #
 # Description: SLURM batch script for xMSannotator annotation across multiple
@@ -18,7 +18,8 @@
 # Paths: study_dir as in the Step 1-3 job scripts. Step 1 output is read from
 # <study_dir>/2-Data_Extraction/<lc_mode>/ and the per-polarity sample mapfiles
 # from <study_dir>/1-mzML/<lc_mode>/; output goes to
-# <study_dir>/2-Data_Extraction/<lc_mode>/<mode>/7-<mode>_<study>_<DB>_CLUES_Annotation/.
+# <study_dir>/2-Data_Extraction/<lc_mode>/<mode>/7-<mode>_<study>_xMSannotator/<File_name_out>/
+# (the xlsx, run_info.txt, intermediate/Stage*.txt.gz), with a README in the 7- folder.
 #
 # Needs: R/4.5.2 with CLUES.xMSannotator, readxl, writexl, dplyr, data.table.
 #

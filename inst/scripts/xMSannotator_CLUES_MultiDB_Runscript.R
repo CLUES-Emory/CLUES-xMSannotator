@@ -1,10 +1,17 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-11-13 (CLUES.xMSannotator 1.2.3)
+# Date: 2026-11-13 (CLUES.xMSannotator 1.3.0)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
+# Output: <output_dir>/<mode>/7-<mode>_<study>_xMSannotator/
+#           <mode>-<study>_xMSannotator_README.md         (written by every task, same content)
+#           <File_name_out>/<mode>-<study>_<File_name_out>_CLUES_Annotation.xlsx
+#           <File_name_out>/run_info.txt                   (inputs, versions, settings, counts)
+#           <File_name_out>/intermediate/Stage*.txt.gz     (advanced_annotation() Stage files)
 ###############################################################################
+
+run_start <- Sys.time()
 
 # =============================================================================
 # Section 1: Load Packages
@@ -368,19 +375,94 @@ boost_time_tolerance <- NULL            # defaults to time_tolerance
 # Section 7: Run Annotation
 # =============================================================================
 
-# Output directory (per-database subdirectory). Prefix 7- follows the Step 1-3 folders
-# (4- MS2 extraction, 5- confirmed compounds, 6- MS2 matching); 4c- before 1.2.2.
-outloc <- paste0(config$output_base_loc, "/", lc_mode, "/7-", lc_mode, "_", study_id, "_",
-                 db_ls[[ii, "File_name_out"]], "_CLUES_Annotation/")
+# Output layout (1.3.0): one step folder per mode, one subfolder per database. Prefix 7- follows the
+# Step 1-3 folders (4- MS2 extraction, 5- confirmed compounds, 6- MS2 matching). Before 1.3.0 each
+# database had its own 7-<mode>_<study>_<DB>_CLUES_Annotation/ (1.2.2) or 4c-... folder (before 1.2.2).
+db_out <- db_ls[[ii, "File_name_out"]]
+step_dir <- file.path(sub("/+$", "", config$output_base_loc), lc_mode, paste0("7-", lc_mode, "_", study_id, "_xMSannotator"))
+db_dir <- file.path(step_dir, db_out)
+outloc <- file.path(db_dir, "intermediate")   # advanced_annotation() writes its Stage files here
 dir.create(outloc, recursive = TRUE, showWarnings = FALSE)
 
 # Check if output already exists — skip if so
-output_name <- file.path(outloc, paste0(lc_mode, "-", study_id, "_",
-                         db_ls[[ii, "File_name_out"]], "_CLUES_Annotation.xlsx"))
+output_name <- file.path(db_dir, paste0(lc_mode, "-", study_id, "_", db_out, "_CLUES_Annotation.xlsx"))
 if (file.exists(output_name)) {
   cat(sprintf("Output already exists, skipping: %s\n", output_name))
   quit(save = "no", status = 0)
 }
+
+# --- Run record helpers ---
+fmt_setting <- function(x) {
+  if (is.null(x)) return("NULL")
+  if (is.data.frame(x)) return(paste(trimws(x[[1]]), x[[2]], sep = "=", collapse = ", "))
+  if (is.character(x)) return(paste(trimws(x), collapse = ", "))
+  paste(format(x, scientific = FALSE, trim = TRUE), collapse = ", ")
+}
+runscript_path <- sub("^--file=", "", grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE))
+runscript_md5 <- if (length(runscript_path) == 1 && file.exists(runscript_path)) unname(tools::md5sum(runscript_path)) else NA
+settings <- list(
+  batch_correction = config$batch_correction, blank_names = blank_names,
+  feature_groups = if (use_feature_groups) "Step 1 Stage 3 groups (WGCNA not run)" else paste("none: WGCNA; fc_threshold", fc_threshold),
+  selected_adducts = selected_adducts, filter_by = filter_by, primary_weight = primary_weight,
+  mass_tolerance = mass_tolerance, time_tolerance = time_tolerance, correlation_threshold = correlation_threshold,
+  isotope_mass_tolerance = isotope_mass_tolerance, mass_defect_tolerance = mass_defect_tolerance,
+  mass_defect_precision = mass_defect_precision, intensity_deviation_tolerance = intensity_deviation_tolerance,
+  maximum_isotopes = maximum_isotopes, identify_isotopologues_flag = identify_isotopologues_flag,
+  peak_rt_width = peak_rt_width, deep_split = deep_split, min_cluster_size = min_cluster_size, network_type = network_type,
+  MplusH_abundance_ratio_check = MplusH_abundance_ratio_check, multimer_abundance_check = multimer_abundance_check,
+  redundancy_filtering = redundancy_filtering, multi_rt_clusters = multi_rt_clusters, clustering_seed = clustering_seed,
+  min_ions_per_chemical = min_ions_per_chemical, level1_primary_adducts = level1_primary_adducts,
+  pathway_mode = pathway_mode, boosted_compounds = if (is.null(boosted_compounds)) NULL else paste(nrow(boosted_compounds), "rows"),
+  n_workers = n_workers)
+settings_lines <- sprintf("| %s | %s |", names(settings), vapply(settings, fmt_setting, ""))
+# adduct_weights depends on the database (bare-ion pseudo-adducts [M]+ ... for charged compounds): run_info.txt only
+db_settings <- list(adduct_weights = adduct_weights)
+
+# --- Step-folder README: same content from every task of this mode (no task-specific values or times);
+#     written to a temporary file and renamed, so tasks running at the same time never leave a partial file ---
+readme_path <- file.path(step_dir, paste0(lc_mode, "-", study_id, "_xMSannotator_README.md"))
+final_stage <- if (redundancy_filtering) "Stage5_curated_results" else "Stage4b_confidence_levels"
+readme <- c(
+  sprintf("# xMSannotator annotation: %s %s", study_id, lc_mode), "",
+  "The Step 1 feature table annotated against each compound database of the mapfile, one database per SLURM array task",
+  "(`run_CLUES_xMSannotator.sh`, `xMSannotator_CLUES_MultiDB_Runscript.R`). Every database is annotated on its own:",
+  "scores and confidence levels compare candidates within one database, not across databases. Nothing is merged.", "",
+  "## Layout", "```",
+  sprintf("7-%s_%s_xMSannotator/", lc_mode, study_id),
+  sprintf("├── %s", basename(readme_path)),
+  "└── <File_name_out>/                     one folder per database (table below)",
+  sprintf("    ├── %s-%s_<File_name_out>_CLUES_Annotation.xlsx   the result", lc_mode, study_id),
+  "    ├── run_info.txt                     inputs and md5, versions, settings, counts, run time of this database",
+  "    └── intermediate/                    advanced_annotation() Stage files, gzipped after the xlsx is written", "```", "",
+  "A database folder with no xlsx, or with uncompressed `intermediate/*.txt`, is from a task that did not finish.", "",
+  "## Files",
+  sprintf("- **xlsx**: `%s` (one row per compound x adduct or isotope x feature) joined with the database METADATA file", final_stage),
+  "  (by `compound_id`), the feature table QA columns (by `feature_id`) and the Step 1 `feature_group`. Column reference:",
+  "  `docs/Stage5_Output_Reference.md` and `docs/xMSannotator_Workflow.md` of CLUES-xMSannotator.",
+  "- **intermediate/** (tab-separated, gzipped):",
+  "  `Stage1_mass_matched` (mass matches), `Stage1_peak_clusters` (feature groups or WGCNA modules; same for every database),",
+  "  `Stage2_isotope_detection`, `Stage3_chemical_scores`, `Stage3_pathway_*`, `Stage4_confidence_levels`,",
+  "  `Stage4a_confidence_levels` (all rows, including incoherent), `Stage4b_confidence_levels` (coherent rows: the xlsx),",
+  "  `Stage5_curated_results` (only with redundancy_filtering = TRUE).",
+  "  Fields are quoted; a quote inside a field is written as `\\\"`. `data.table::fread()` reads them; `read.table()` needs",
+  "  `\\\"` turned into `\"\"` first (as the runscript does).", "",
+  "## Databases", sprintf("Mapfile: `%s` (md5 %s)", config$db_mapfile_path, unname(tools::md5sum(config$db_mapfile_path))), "",
+  "| Number | File_name_out | DB_name | Meta_File |", "|---|---|---|---|",
+  sprintf("| %s | %s | %s | %s |", db_ls$Number, db_ls$File_name_out, db_ls$DB_name, db_ls$Meta_File), "",
+  "## Inputs",
+  sprintf("- Feature table: `%s`", feature_table_path),
+  sprintf("- Feature groups: `%s`", if (use_feature_groups) feature_groups_path else "none"),
+  sprintf("- Sample mapfile: `%s` (blank sample types removed: %s)", mapfile_path, paste(blank_names, collapse = ", ")), "",
+  "## Versions",
+  sprintf("- CLUES.xMSannotator %s; %s", as.character(packageVersion("CLUES.xMSannotator")), R.version.string),
+  sprintf("- Runscript: `%s` (md5 %s)", if (length(runscript_path) == 1) runscript_path else "unknown", runscript_md5), "",
+  sprintf("## Settings (%s mode)", charge_type),
+  "Adduct weights: primary_weight on M+H / M-H, 1 on the other adducts; databases with charged compounds also get",
+  "bare-ion adducts ([M]+, [M]-, ...) with weight 1. Each database's full list is in its run_info.txt.", "",
+  "| setting | value |", "|---|---|", settings_lines)
+readme_tmp <- paste0(readme_path, ".tmp", Sys.getpid())
+writeLines(readme, readme_tmp)
+if (!file.rename(readme_tmp, readme_path)) stop("Could not write ", readme_path)
 
 cat("\n")
 cat("===========================================================\n")
@@ -482,3 +564,67 @@ if (!is.null(feature_groups)) {
 write_xlsx(results, output_name)
 cat(sprintf("\nResults exported to: %s\n", output_name))
 cat(sprintf("Total annotations: %d\n", nrow(results)))
+
+
+# =============================================================================
+# Section 9: Compress intermediates, write run_info.txt
+# =============================================================================
+
+# Row count of Stage 1 before compression (header excluded)
+stage1_file <- file.path(outloc, "Stage1_mass_matched.txt")
+n_stage1 <- if (file.exists(stage1_file)) length(readLines(stage1_file)) - 1L else NA_integer_
+
+# gzip each Stage file; the original is removed only after the decompressed copy is byte-identical
+gzip_verified <- function(f) {
+  raw_in <- readBin(f, "raw", file.size(f))
+  gz <- paste0(f, ".gz")
+  con <- gzfile(gz, "wb"); writeBin(raw_in, con); close(con)
+  con <- gzfile(gz, "rb"); raw_back <- readBin(con, "raw", length(raw_in) + 1L); close(con)
+  if (!identical(raw_in, raw_back)) stop("gzip check failed for ", f, "; uncompressed file kept")
+  file.remove(f)
+  gz
+}
+stage_files <- list.files(outloc, pattern = "^Stage.*\\.txt$", full.names = TRUE)
+gz_files <- vapply(stage_files, gzip_verified, "")
+cat(sprintf("Compressed %d Stage files in %s\n", length(gz_files), outloc))
+
+conf_tab <- table(factor(results$Confidence, levels = 0:4))
+run_info <- c(
+  sprintf("run_info: xMSannotator, %s %s, database %s", study_id, lc_mode, db_out),
+  sprintf("written: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
+  sprintf("run_time_min: %.1f", as.numeric(difftime(Sys.time(), run_start, units = "mins"))),
+  "",
+  "[database]",
+  sprintf("array_index: %s (mapfile Number %s, %s mode)", config$array_index, db_ls[[ii, "Number"]], charge_type),
+  sprintf("File_name_out: %s", db_out),
+  sprintf("DB_name: %s (md5 %s)", compound_db_path, unname(tools::md5sum(compound_db_path))),
+  sprintf("Meta_File: %s (md5 %s)", db_metafile_path, unname(tools::md5sum(db_metafile_path))),
+  sprintf("mapfile: %s (md5 %s)", config$db_mapfile_path, unname(tools::md5sum(config$db_mapfile_path))),
+  sprintf("compounds after polarity filter: %d", nrow(compound_table)),
+  "",
+  "[inputs]",
+  sprintf("feature_table: %s", feature_table_path),
+  sprintf("feature_groups: %s", if (use_feature_groups) feature_groups_path else "none"),
+  sprintf("sample_mapfile: %s", mapfile_path),
+  sprintf("features: %d | samples: %d", nrow(peak_table), length(sample_cols)),
+  "",
+  "[versions]",
+  sprintf("CLUES.xMSannotator: %s", as.character(packageVersion("CLUES.xMSannotator"))),
+  sprintf("R: %s", R.version.string),
+  sprintf("runscript: %s (md5 %s)", if (length(runscript_path) == 1) runscript_path else "unknown", runscript_md5),
+  "",
+  "[settings]",
+  sprintf("%s: %s", names(settings), vapply(settings, fmt_setting, "")),
+  sprintf("%s: %s", names(db_settings), vapply(db_settings, fmt_setting, "")),
+  "",
+  "[counts]",
+  sprintf("stage1_mass_matches: %s", n_stage1),
+  sprintf("xlsx_rows (%s): %d", final_stage, nrow(results)),
+  sprintf("annotated_features: %d | compounds: %d", length(unique(results$feature_id)), length(unique(results$compound_id))),
+  sprintf("rows_by_confidence: %s", paste(names(conf_tab), conf_tab, sep = "=", collapse = " ")),
+  "",
+  "[files]",
+  sprintf("%s (md5 %s)", basename(output_name), unname(tools::md5sum(output_name))),
+  sprintf("intermediate/%s", basename(gz_files)))
+writeLines(run_info, file.path(db_dir, "run_info.txt"))
+cat(sprintf("Run record: %s\n", file.path(db_dir, "run_info.txt")))

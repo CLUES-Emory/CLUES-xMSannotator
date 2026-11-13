@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Changed
+- MultiDB runscript output layout (1.3.0): `<mode>/7-<mode>_<study>_xMSannotator/<File_name_out>/` with the xlsx, `run_info.txt` (inputs with md5, versions, settings, counts) and `intermediate/` (Stage files gzipped after export, verified before the originals are removed); a README per mode in the step folder. Annotation results unchanged. See `NEWS.md`. (2026-11-13)
+
 ### Fixed
 - Stage 3 scoring (1.2.3): `get_data_and_score_for_chemical()` selected columns by position (12:14) in its branch for compounds whose rows span more than `max_diff_rt`. The table has 12 columns, so any compound in that branch stopped the run. Columns are now selected by name. MultiDB runscript Section 8 reads the Stage 4b file after turning `\"` into `""`, so a compound name containing a double quote no longer merges rows. See `NEWS.md`. (2026-11-13)
 
