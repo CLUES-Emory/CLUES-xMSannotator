@@ -1,3 +1,24 @@
+# CLUES.xMSannotator 1.2.3
+
+## Bug fixes
+
+* `get_data_and_score_for_chemical()` (Stage 3 chemical scoring): when the
+  rows selected for a compound span more than `max_diff_rt` (rounded), the
+  table was reordered with `cbind(m[, 2:11], m[, 1], m[, 12:14])`. That code is
+  inherited from xMSannotator 1.3.2 and assumes 14 columns, but the table has
+  12. Any compound reaching this branch stopped the whole run with "undefined
+  columns selected". The columns are now selected by name, in the order the code
+  already assigned. Found with the 2026-11-12 database bundle on CLU0162 C18pos
+  (PharmMet and NormanNetwork; run 89). Runs that never reached this branch are
+  not affected.
+* MultiDB runscript, Section 8: the Stage 4b (or 5) file is read back after
+  turning write.table's escaped quote (`\"`) into a doubled quote (`""`), which
+  read.table accepts. Before, a compound name containing a double quote
+  (NormanNetwork `Myricitrin 2"-O-gallate`) merged the following 12,174 rows into
+  one field. The Excel export then failed on the 32,767-character cell limit. A
+  shorter merged field would have exported without error and lost the rows.
+  Files without such a quote read as before (13 outputs compared, run 89).
+
 # CLUES.xMSannotator 1.2.2
 
 ## Runscripts (no package code change)

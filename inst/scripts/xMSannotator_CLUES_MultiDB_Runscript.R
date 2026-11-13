@@ -1,7 +1,7 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-11-13 (CLUES.xMSannotator 1.2.2)
+# Date: 2026-11-13 (CLUES.xMSannotator 1.2.3)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
 ###############################################################################
@@ -449,7 +449,11 @@ if (redundancy_filtering) {
   results_file <- file.path(outloc, "Stage4b_confidence_levels.txt")
 }
 
-results <- read.table(results_file, sep = "\t", header = TRUE)
+# The Stage files are written by write.table(), which escapes a double quote inside a field as \".
+# read.table() does not read that form back: one compound name with a quote (NormanNetwork,
+# 'Myricitrin 2"-O-gallate') merged 12,174 rows into one field (1.2.3). Turning \" into the doubled
+# quote "" that read.table accepts reads every row; files without such a quote read as before.
+results <- read.table(text = gsub('\\"', '""', readLines(results_file), fixed = TRUE), sep = "\t", header = TRUE)
 
 # Join with compound metadata
 results <- left_join(results, db_metafile, by = "compound_id")

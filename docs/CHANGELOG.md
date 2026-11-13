@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Fixed
+- Stage 3 scoring (1.2.3): `get_data_and_score_for_chemical()` selected columns by position (12:14) in its branch for compounds whose rows span more than `max_diff_rt`. The table has 12 columns, so any compound in that branch stopped the run. Columns are now selected by name. MultiDB runscript Section 8 reads the Stage 4b file after turning `\"` into `""`, so a compound name containing a double quote no longer merges rows. See `NEWS.md`. (2026-11-13)
+
 ### Changed
 - Runscripts (1.2.2): `run_CLUES_xMSannotator.sh` derives its paths from `study_dir` (`2-Data_Extraction/<lc_mode>/`, `1-mzML/<lc_mode>/`), loads R/4.5.2, points `r_script` at `/clues/~Data_Extraction/xMSannotator/`, and reports a failed task. The MultiDB runscript writes `7-<mode>_<study>_<DB>_CLUES_Annotation/` (was `4c-`). See `NEWS.md`. (2026-11-13)
 
