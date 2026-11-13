@@ -1,3 +1,24 @@
+# CLUES.xMSannotator 1.2.2
+
+## Runscripts (no package code change)
+
+* `run_CLUES_xMSannotator.sh`:
+  * Paths come from one `study_dir`, as in the HighResolutionExposomics_Workflow
+    Step 1-3 job scripts: Step 1 output from `<study_dir>/2-Data_Extraction/<lc_mode>/`,
+    sample mapfiles from `<study_dir>/1-mzML/<lc_mode>/`. `output_dir` and
+    `mapfile_dir` remain as optional overrides. The script stops if either
+    folder or `db_mapfile` is missing.
+  * `module load R/4.5.2` (was R/4.4.0).
+  * `r_script` is `/clues/~Data_Extraction/xMSannotator/xMSannotator_CLUES_MultiDB_Runscript.R`
+    (was `/clues/~Scripts/`).
+  * A failing `Rscript` now prints the "FAILED: Task ..." summary. Before, `set -e`
+    ended the script before the summary.
+* `xMSannotator_CLUES_MultiDB_Runscript.R`: the per-database output folder is
+  `<mode>/7-<mode>_<study>_<DB>_CLUES_Annotation/` (was `4c-`), after the Step 1-3
+  folders 4- (MS2 extraction), 5- (confirmed compounds) and 6- (MS2 matching).
+  Folders written by earlier versions are not renamed or detected. The
+  debug paths follow the study folder layout.
+
 # CLUES.xMSannotator 1.2.1
 
 ## Bug fixes

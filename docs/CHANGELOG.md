@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Changed
+- Runscripts (1.2.2): `run_CLUES_xMSannotator.sh` derives its paths from `study_dir` (`2-Data_Extraction/<lc_mode>/`, `1-mzML/<lc_mode>/`), loads R/4.5.2, points `r_script` at `/clues/~Data_Extraction/xMSannotator/`, and reports a failed task. The MultiDB runscript writes `7-<mode>_<study>_<DB>_CLUES_Annotation/` (was `4c-`). See `NEWS.md`. (2026-11-13)
+
 ### Fixed
 - Adduct table (`sample_adduct_table`, `adduct_table`, test-data copy) corrected (1.2.1): water-loss masses (`M+H-H2O`, `M+H-2H2O`, `2M+3H2O+2H`, `M-H2O-H`, 0.55-1.77 mDa off) and the charges of `M+2K+H` (3) and `M+IsoProp+Na+H` (2); water-loss values in `docs/xMSannotator_Input_Formats.md`. See `NEWS.md`. (2026-11-05)
 

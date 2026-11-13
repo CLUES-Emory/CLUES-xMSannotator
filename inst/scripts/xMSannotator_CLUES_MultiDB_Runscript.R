@@ -1,7 +1,7 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-03-09
+# Date: 2026-11-13 (CLUES.xMSannotator 1.2.2)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
 ###############################################################################
@@ -25,9 +25,9 @@ library(data.table)
 debug_config <- list(
   array_index        = 1,
   lc_column          = "C18",
-  output_base_loc    = "/clues/STUDY/~Data_Extraction/",
+  output_base_loc    = "/clues/CLU0046.1_STUDY/2-Data_Extraction/C18/",
   study_id           = "CLU0046.1",
-  sample_mapfile_dir = "/clues/STUDY/2a_LC_Mapfiles/",
+  sample_mapfile_dir = "/clues/CLU0046.1_STUDY/1-mzML/C18/",
   batch_correction   = "Unadjusted",
   fc_threshold       = 5,
   n_cores            = 10,
@@ -368,8 +368,9 @@ boost_time_tolerance <- NULL            # defaults to time_tolerance
 # Section 7: Run Annotation
 # =============================================================================
 
-# Output directory (per-database subdirectory)
-outloc <- paste0(config$output_base_loc, "/", lc_mode, "/4c-", lc_mode, "_", study_id, "_",
+# Output directory (per-database subdirectory). Prefix 7- follows the Step 1-3 folders
+# (4- MS2 extraction, 5- confirmed compounds, 6- MS2 matching); 4c- before 1.2.2.
+outloc <- paste0(config$output_base_loc, "/", lc_mode, "/7-", lc_mode, "_", study_id, "_",
                  db_ls[[ii, "File_name_out"]], "_CLUES_Annotation/")
 dir.create(outloc, recursive = TRUE, showWarnings = FALSE)
 
