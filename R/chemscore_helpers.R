@@ -622,8 +622,10 @@ get_data_and_score_for_chemical <- function(cor_mz,
     }
     else {
       mchemicaldata$Module_RTclust <- replace_with_module(mchemicaldata$Module_RTclust)
-      mchemicaldata <- cbind(mchemicaldata[, c(2:11)], mchemicaldata[, 1], mchemicaldata[, c(12:14)])
-      colnames(mchemicaldata) <- c("mz", "time", "MatchCategory", "theoretical.mz", "compound_id", "Name", "Formula", "MonoisotopicMass", "Adduct", "Module_RTclust", "mean_int_vec", "MD")
+      # Select by name: the positional cbind(m[, 2:11], m[, 1], m[, 12:14]) inherited from xMSannotator 1.3.2
+      # assumed 14 columns; the table here has these 12, so every compound reaching this branch (rows spanning
+      # more than max_diff_rt) stopped the run with "undefined columns selected" (1.2.3).
+      mchemicaldata <- mchemicaldata[, c("mz", "time", "MatchCategory", "theoretical.mz", "compound_id", "Name", "Formula", "MonoisotopicMass", "Adduct", "Module_RTclust", "mean_int_vec", "MD")]
 
       mchemicaldata <- as.data.frame(mchemicaldata)
       mchemicaldata$time <- as.numeric(as.character(mchemicaldata$time))

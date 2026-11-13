@@ -1,3 +1,66 @@
+# CLUES.xMSannotator 1.3.0
+
+## Runscripts: output layout (no package code change)
+
+* MultiDB runscript output is one step folder per mode with one subfolder per
+  database: `<mode>/7-<mode>_<study>_xMSannotator/<File_name_out>/`. Before,
+  each database had its own `<mode>/7-<mode>_<study>_<DB>_CLUES_Annotation/`
+  folder (1.2.2). Each database folder holds:
+  * the xlsx (unchanged content);
+  * `run_info.txt`: database and METADATA files with md5, mapfile, inputs,
+    package / R / runscript versions, every setting, row counts and run time;
+  * `intermediate/`: the advanced_annotation() Stage files, gzipped after the
+    xlsx is written. Each original is removed only after its decompressed copy
+    is byte-identical.
+* Every task writes `<mode>-<study>_xMSannotator_README.md` in the step folder,
+  covering layout, files, databases, inputs, versions and settings. The content
+  is the same from every task of a mode, and it is written to a temporary file
+  and renamed.
+* The skip-if-exists check looks for the xlsx in the new location. Outputs in
+  the 1.2.2 layout are not detected or moved.
+
+# CLUES.xMSannotator 1.2.3
+
+## Bug fixes
+
+* `get_data_and_score_for_chemical()` (Stage 3 chemical scoring): when the
+  rows selected for a compound span more than `max_diff_rt` (rounded), the
+  table was reordered with `cbind(m[, 2:11], m[, 1], m[, 12:14])`. That code is
+  inherited from xMSannotator 1.3.2 and assumes 14 columns, but the table has
+  12. Any compound reaching this branch stopped the whole run with "undefined
+  columns selected". The columns are now selected by name, in the order the code
+  already assigned. Found with the 2026-11-12 database bundle on CLU0162 C18pos
+  (PharmMet and NormanNetwork; run 89). Runs that never reached this branch are
+  not affected.
+* MultiDB runscript, Section 8: the Stage 4b (or 5) file is read back after
+  turning write.table's escaped quote (`\"`) into a doubled quote (`""`), which
+  read.table accepts. Before, a compound name containing a double quote
+  (NormanNetwork `Myricitrin 2"-O-gallate`) merged the following 12,174 rows into
+  one field. The Excel export then failed on the 32,767-character cell limit. A
+  shorter merged field would have exported without error and lost the rows.
+  Files without such a quote read as before (13 outputs compared, run 89).
+
+# CLUES.xMSannotator 1.2.2
+
+## Runscripts (no package code change)
+
+* `run_CLUES_xMSannotator.sh`:
+  * Paths come from one `study_dir`, as in the HighResolutionExposomics_Workflow
+    Step 1-3 job scripts: Step 1 output from `<study_dir>/2-Data_Extraction/<lc_mode>/`,
+    sample mapfiles from `<study_dir>/1-mzML/<lc_mode>/`. `output_dir` and
+    `mapfile_dir` remain as optional overrides. The script stops if either
+    folder or `db_mapfile` is missing.
+  * `module load R/4.5.2` (was R/4.4.0).
+  * `r_script` is `/clues/~Data_Extraction/xMSannotator/xMSannotator_CLUES_MultiDB_Runscript.R`
+    (was `/clues/~Scripts/`).
+  * A failing `Rscript` now prints the "FAILED: Task ..." summary. Before, `set -e`
+    ended the script before the summary.
+* `xMSannotator_CLUES_MultiDB_Runscript.R`: the per-database output folder is
+  `<mode>/7-<mode>_<study>_<DB>_CLUES_Annotation/` (was `4c-`), after the Step 1-3
+  folders 4- (MS2 extraction), 5- (confirmed compounds) and 6- (MS2 matching).
+  Folders written by earlier versions are not renamed or detected. The
+  debug paths follow the study folder layout.
+
 # CLUES.xMSannotator 1.2.1
 
 ## Bug fixes
