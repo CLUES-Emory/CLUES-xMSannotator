@@ -1,10 +1,17 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-03-09
+# Date: 2026-11-13 (CLUES.xMSannotator 1.4.0)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
+# Output: <output_dir>/<mode>/7-<mode>_<study>_xMSannotator/
+#           <mode>-<study>_xMSannotator_README.md         (written by every task, same content)
+#           <File_name_out>/<mode>-<study>_<File_name_out>_CLUES_Annotation.xlsx
+#           <File_name_out>/run_info.txt                   (inputs, versions, settings, counts)
+#           <File_name_out>/intermediate/Stage*.txt.gz     (advanced_annotation() Stage files)
 ###############################################################################
+
+run_start <- Sys.time()
 
 # =============================================================================
 # Section 1: Load Packages
@@ -25,14 +32,15 @@ library(data.table)
 debug_config <- list(
   array_index        = 1,
   lc_column          = "C18",
-  output_base_loc    = "/clues/STUDY/~Data_Extraction/",
+  output_base_loc    = "/clues/CLU0046.1_STUDY/2-Data_Extraction/C18/",
   study_id           = "CLU0046.1",
-  sample_mapfile_dir = "/clues/STUDY/2a_LC_Mapfiles/",
+  sample_mapfile_dir = "/clues/CLU0046.1_STUDY/1-mzML/C18/",
   batch_correction   = "Unadjusted",
   fc_threshold       = 5,
   n_cores            = 10,
   db_mapfile_path    = "/clues/.../Compound_Database_Mapfile_v3.xlsx",
-  blank_names        = "Water,Blank"
+  blank_names        = "Water,Blank",
+  rt_esi_prediction_dir = ""          # optional: predictions/<release>/xmsannotator_<bundle>/ of the reference library
 )
 
 # --- Parse configuration from CLI args or debug_config ---
@@ -50,7 +58,8 @@ parse_config <- function(input) {
       fc_threshold       = as.numeric(input[7]),
       n_cores            = as.numeric(input[8]),
       db_mapfile_path    = input[9],
-      blank_names        = input[10]
+      blank_names        = input[10],
+      rt_esi_prediction_dir = if (length(input) >= 11) input[11] else ""   # optional (1.4.0)
     )
   }
   cfg
@@ -127,6 +136,31 @@ n_workers <- config$n_cores
 
 # Feature ID column name
 feature_id_column <- "feature_id"
+
+# Step 1 Stage 4 MS2 features (v1.8.5+): one row per feature with matched DDA MS2 scans. Joined to the Stage 4b rows
+# (Section 8); without the file (no DDA data, older Step 1) the MS2 columns are NA.
+ms2_features_path <- file.path(outloc_base, paste0("4-", lc_mode, "_", study_id, "_MS2_Extraction"),
+                               paste0(lc_mode, "-", study_id, "_MS2_Features.txt"))
+use_ms2 <- file.exists(ms2_features_path)
+cat(sprintf("MS2 features:   %s\n", if (use_ms2) ms2_features_path else paste("none (", ms2_features_path, "not found): MS2 columns NA")))
+
+# RT and ionization-mode predictions for the database bundle (reference-library predictions/<release>/xmsannotator_<bundle>/,
+# built by 7-Data_Annotation/RT_ESI_Prediction/predict_rt_esi_bundle.R). Optional: without it the prediction columns are NA.
+rt_esi_dir <- config$rt_esi_prediction_dir
+use_rt_esi <- length(rt_esi_dir) == 1 && !is.na(rt_esi_dir) && nzchar(rt_esi_dir)
+rt_esi_file <- NA_character_; rt_window95 <- NA_real_; rt_void <- NA_real_
+if (use_rt_esi) {
+  rt_esi_file <- file.path(rt_esi_dir, sprintf("xmsannotator_rt_esi_predictions_%s.csv", lc_mode))
+  ms_file <- file.path(rt_esi_dir, "model_summary.csv")
+  if (!file.exists(rt_esi_file) || !file.exists(ms_file)) {
+    stop("rt_esi_prediction_dir is set but ", basename(rt_esi_file), " or model_summary.csv is missing in ", rt_esi_dir)
+  }
+  rt_ms <- read.csv(ms_file)
+  if (!lc_mode %in% rt_ms$lc_mode) stop("model_summary.csv in ", rt_esi_dir, " has no row for ", lc_mode)
+  rt_window95 <- rt_ms$window95_sec[rt_ms$lc_mode == lc_mode]; rt_void <- rt_ms$void_sec[rt_ms$lc_mode == lc_mode]
+}
+cat(sprintf("RT / ESI pred.: %s\n", if (use_rt_esi) sprintf("%s (window95 %.2f s, void %s s)", rt_esi_file, rt_window95, rt_void) else
+  "none (rt_esi_prediction_dir not set): prediction columns NA"))
 
 
 # =============================================================================
@@ -368,18 +402,110 @@ boost_time_tolerance <- NULL            # defaults to time_tolerance
 # Section 7: Run Annotation
 # =============================================================================
 
-# Output directory (per-database subdirectory)
-outloc <- paste0(config$output_base_loc, "/", lc_mode, "/4c-", lc_mode, "_", study_id, "_",
-                 db_ls[[ii, "File_name_out"]], "_CLUES_Annotation/")
+# Output layout (1.3.0): one step folder per mode, one subfolder per database. Prefix 7- follows the
+# Step 1-3 folders (4- MS2 extraction, 5- confirmed compounds, 6- MS2 matching). Before 1.3.0 each
+# database had its own 7-<mode>_<study>_<DB>_CLUES_Annotation/ (1.2.2) or 4c-... folder (before 1.2.2).
+db_out <- db_ls[[ii, "File_name_out"]]
+step_dir <- file.path(sub("/+$", "", config$output_base_loc), lc_mode, paste0("7-", lc_mode, "_", study_id, "_xMSannotator"))
+db_dir <- file.path(step_dir, db_out)
+outloc <- file.path(db_dir, "intermediate")   # advanced_annotation() writes its Stage files here
 dir.create(outloc, recursive = TRUE, showWarnings = FALSE)
 
 # Check if output already exists — skip if so
-output_name <- file.path(outloc, paste0(lc_mode, "-", study_id, "_",
-                         db_ls[[ii, "File_name_out"]], "_CLUES_Annotation.xlsx"))
+output_name <- file.path(db_dir, paste0(lc_mode, "-", study_id, "_", db_out, "_CLUES_Annotation.xlsx"))
 if (file.exists(output_name)) {
   cat(sprintf("Output already exists, skipping: %s\n", output_name))
   quit(save = "no", status = 0)
 }
+
+# --- Run record helpers ---
+fmt_setting <- function(x) {
+  if (is.null(x)) return("NULL")
+  if (is.data.frame(x)) return(paste(trimws(x[[1]]), x[[2]], sep = "=", collapse = ", "))
+  if (is.character(x)) return(paste(trimws(x), collapse = ", "))
+  paste(format(x, scientific = FALSE, trim = TRUE), collapse = ", ")
+}
+runscript_path <- sub("^--file=", "", grep("^--file=", commandArgs(trailingOnly = FALSE), value = TRUE))
+runscript_md5 <- if (length(runscript_path) == 1 && file.exists(runscript_path)) unname(tools::md5sum(runscript_path)) else NA
+settings <- list(
+  batch_correction = config$batch_correction, blank_names = blank_names,
+  feature_groups = if (use_feature_groups) "Step 1 Stage 3 groups (WGCNA not run)" else paste("none: WGCNA; fc_threshold", fc_threshold),
+  selected_adducts = selected_adducts, filter_by = filter_by, primary_weight = primary_weight,
+  mass_tolerance = mass_tolerance, time_tolerance = time_tolerance, correlation_threshold = correlation_threshold,
+  isotope_mass_tolerance = isotope_mass_tolerance, mass_defect_tolerance = mass_defect_tolerance,
+  mass_defect_precision = mass_defect_precision, intensity_deviation_tolerance = intensity_deviation_tolerance,
+  maximum_isotopes = maximum_isotopes, identify_isotopologues_flag = identify_isotopologues_flag,
+  peak_rt_width = peak_rt_width, deep_split = deep_split, min_cluster_size = min_cluster_size, network_type = network_type,
+  MplusH_abundance_ratio_check = MplusH_abundance_ratio_check, multimer_abundance_check = multimer_abundance_check,
+  redundancy_filtering = redundancy_filtering, multi_rt_clusters = multi_rt_clusters, clustering_seed = clustering_seed,
+  min_ions_per_chemical = min_ions_per_chemical, level1_primary_adducts = level1_primary_adducts,
+  pathway_mode = pathway_mode, boosted_compounds = if (is.null(boosted_compounds)) NULL else paste(nrow(boosted_compounds), "rows"),
+  n_workers = n_workers)
+settings_lines <- sprintf("| %s | %s |", names(settings), vapply(settings, fmt_setting, ""))
+# adduct_weights depends on the database (bare-ion pseudo-adducts [M]+ ... for charged compounds): run_info.txt only
+db_settings <- list(adduct_weights = adduct_weights)
+
+# --- Step-folder README: same content from every task of this mode (no task-specific values or times);
+#     written to a temporary file and renamed, so tasks running at the same time never leave a partial file ---
+readme_path <- file.path(step_dir, paste0(lc_mode, "-", study_id, "_xMSannotator_README.md"))
+final_stage <- if (redundancy_filtering) "Stage5_curated_results" else "Stage4b_confidence_levels"
+readme <- c(
+  sprintf("# xMSannotator annotation: %s %s", study_id, lc_mode), "",
+  "The Step 1 feature table annotated against each compound database of the mapfile, one database per SLURM array task",
+  "(`run_CLUES_xMSannotator.sh`, `xMSannotator_CLUES_MultiDB_Runscript.R`). Every database is annotated on its own:",
+  "scores and confidence levels compare candidates within one database, not across databases. Nothing is merged.", "",
+  "## Layout", "```",
+  sprintf("7-%s_%s_xMSannotator/", lc_mode, study_id),
+  sprintf("├── %s", basename(readme_path)),
+  "└── <File_name_out>/                     one folder per database (table below)",
+  sprintf("    ├── %s-%s_<File_name_out>_CLUES_Annotation.xlsx   the result", lc_mode, study_id),
+  "    ├── run_info.txt                     inputs and md5, versions, settings, counts, run time of this database",
+  "    └── intermediate/                    advanced_annotation() Stage files, gzipped after the xlsx is written", "```", "",
+  "A database folder with no xlsx, or with uncompressed `intermediate/*.txt`, is from a task that did not finish.", "",
+  "## Files",
+  sprintf("- **xlsx**: `%s` (one row per compound x adduct or isotope x feature) joined with the database METADATA file", final_stage),
+  "  (by `compound_id`), the feature table QA columns (by `feature_id`) and the Step 1 `feature_group`. Column reference:",
+  "  `docs/Stage5_Output_Reference.md` and `docs/xMSannotator_Workflow.md` of CLUES-xMSannotator.",
+  "- **intermediate/** (tab-separated, gzipped):",
+  "  `Stage1_mass_matched` (mass matches), `Stage1_peak_clusters` (feature groups or WGCNA modules; same for every database),",
+  "  `Stage2_isotope_detection`, `Stage3_chemical_scores`, `Stage3_pathway_*`, `Stage4_confidence_levels`,",
+  "  `Stage4a_confidence_levels` (all rows, including incoherent), `Stage4b_confidence_levels` (coherent rows: the xlsx),",
+  "  `Stage5_curated_results` (only with redundancy_filtering = TRUE).",
+  "  Fields are quoted; a quote inside a field is written as `\\\"`. `data.table::fread()` reads them; `read.table()` needs",
+  "  `\\\"` turned into `\"\"` first (as the runscript does).", "",
+  "## Databases", sprintf("Mapfile: `%s` (md5 %s)", config$db_mapfile_path, unname(tools::md5sum(config$db_mapfile_path))), "",
+  "| Number | File_name_out | DB_name | Meta_File |", "|---|---|---|---|",
+  sprintf("| %s | %s | %s | %s |", db_ls$Number, db_ls$File_name_out, db_ls$DB_name, db_ls$Meta_File), "",
+  "## Inputs",
+  sprintf("- Feature table: `%s`", feature_table_path),
+  sprintf("- Feature groups: `%s`", if (use_feature_groups) feature_groups_path else "none"),
+  sprintf("- Sample mapfile: `%s` (blank sample types removed: %s)", mapfile_path, paste(blank_names, collapse = ", ")),
+  sprintf("- MS2 features (Step 1 Stage 4): `%s`", if (use_ms2) ms2_features_path else "none"),
+  sprintf("- RT / ionization-mode predictions: %s", if (use_rt_esi) sprintf("`%s` (md5 %s; window95 %.2f s, void %s s)", rt_esi_file,
+          unname(tools::md5sum(rt_esi_file)), rt_window95, rt_void) else "none"), "",
+  "## Columns added to the Stage 4b rows (before the METADATA and feature joins)",
+  "Confidence, score and the rows are unchanged; these columns are information only.",
+  "- `rt_pred_sec`: predicted RT of the compound (formula rows, e.g. HMDB `HMF_`: median of the member structures);",
+  "  `rt_pred_min_sec` / `rt_pred_max_sec`: for formula rows, the range of the members' predictions (not an error bar);",
+  "  `rt_pred_source`: structure / formula_members; `rt_pred_error_sec` = observed RT - `rt_pred_sec`;",
+  "  `rt_pred_within_w95`: |observed - predicted| <= window95 (formula rows: observed within [min - window95, max + window95]),",
+  "  both RTs clipped at the void time as in the model's cross-validation; `p_detected`: predicted probability that the",
+  "  compound is detected in this polarity (formula rows: highest member); `is_rt_standard`: a training standard of the RT",
+  "  model; `rt_esi_no_prediction_reason`.",
+  "- `ms2_status` (Step 1 Stage 4: acquired / isotope_triggered_only / assigned_to_other_feature / no_survey_signal; none =",
+  "  no MS2 scan matched the feature); `has_ms2` (acquired with a spectrum); `ms2_n_peaks`; `ms2_n_files`;",
+  "  `ms2_best_purity` (share of the isolation-window ion signal that belongs to the feature in the best scan, 0-1);",
+  "  `ms2_spectrum_method`. The spectra are in the Step 1 `4-` folder (MSP / MGF).", "",
+  "## Versions",
+  sprintf("- CLUES.xMSannotator %s; %s", as.character(packageVersion("CLUES.xMSannotator")), R.version.string),
+  sprintf("- Runscript: `%s` (md5 %s)", if (length(runscript_path) == 1) runscript_path else "unknown", runscript_md5), "",
+  sprintf("## Settings (%s mode)", charge_type),
+  "Adduct weights: primary_weight on M+H / M-H, 1 on the other adducts; databases with charged compounds also get",
+  "bare-ion adducts ([M]+, [M]-, ...) with weight 1. Each database's full list is in its run_info.txt.", "",
+  "| setting | value |", "|---|---|", settings_lines)
+readme_tmp <- paste0(readme_path, ".tmp", Sys.getpid())
+writeLines(readme, readme_tmp)
+if (!file.rename(readme_tmp, readme_path)) stop("Could not write ", readme_path)
 
 cat("\n")
 cat("===========================================================\n")
@@ -448,7 +574,46 @@ if (redundancy_filtering) {
   results_file <- file.path(outloc, "Stage4b_confidence_levels.txt")
 }
 
-results <- read.table(results_file, sep = "\t", header = TRUE)
+# The Stage files are written by write.table(), which escapes a double quote inside a field as \".
+# read.table() does not read that form back: one compound name with a quote (NormanNetwork,
+# 'Myricitrin 2"-O-gallate') merged 12,174 rows into one field (1.2.3). Turning \" into the doubled
+# quote "" that read.table accepts reads every row; files without such a quote read as before.
+results <- read.table(text = gsub('\\"', '""', readLines(results_file), fixed = TRUE), sep = "\t", header = TRUE)
+
+# --- Columns added to the Stage 4b rows before the metadata joins (1.4.0); rows, confidence and score unchanged ---
+n_rows_4b <- nrow(results)
+rt_obs <- results[[if ("time.x" %in% names(results)) "time.x" else "time"]]
+pred_cols <- c("rt_pred_sec", "rt_pred_min_sec", "rt_pred_max_sec", "rt_pred_source", "p_detected", "is_rt_standard", "rt_esi_no_prediction_reason")
+if (use_rt_esi) {
+  pr <- data.table::fread(rt_esi_file, colClasses = c(compound_id = "character"), na.strings = "",
+                          select = c("compound_id", setdiff(pred_cols, "rt_esi_no_prediction_reason"), "no_prediction_reason"))
+  if (anyDuplicated(pr$compound_id)) stop("Duplicated compound_id in ", rt_esi_file)
+  data.table::setnames(pr, "no_prediction_reason", "rt_esi_no_prediction_reason")
+  results <- left_join(results, as.data.frame(pr), by = "compound_id")
+  results$rt_esi_no_prediction_reason[!results$compound_id %in% pr$compound_id] <- "not_in_prediction_file"
+  clip <- function(x) pmax(x, rt_void)   # as the cross-validation window: two unretained compounds count as equal
+  is_range <- results$rt_pred_source %in% "formula_members"
+  results$rt_pred_error_sec <- round(rt_obs - results$rt_pred_sec, 2)
+  results$rt_pred_within_w95 <- ifelse(is_range,
+    clip(rt_obs) >= clip(results$rt_pred_min_sec) - rt_window95 & clip(rt_obs) <= clip(results$rt_pred_max_sec) + rt_window95,
+    abs(clip(rt_obs) - clip(results$rt_pred_sec)) <= rt_window95)
+} else {
+  for (k in c(pred_cols, "rt_pred_error_sec", "rt_pred_within_w95")) results[[k]] <- NA
+}
+ms2_cols <- c("ms2_status", "has_ms2", "ms2_n_peaks", "ms2_n_files", "ms2_best_purity", "ms2_spectrum_method")
+if (use_ms2) {
+  ms2 <- data.table::fread(ms2_features_path, colClasses = c(feature_id = "character"),
+                           select = c("feature_id", "ms2_status", "n_peaks", "n_files", "best_purity", "spectrum_method"))
+  if (anyDuplicated(ms2$feature_id)) stop("Duplicated feature_id in ", ms2_features_path)
+  i <- match(results$feature_id, ms2$feature_id)
+  results$ms2_status <- ifelse(is.na(i), "none", ms2$ms2_status[i])   # none: no MS2 scan matched the feature
+  results$has_ms2 <- results$ms2_status == "acquired" & !is.na(ms2$n_peaks[i]) & ms2$n_peaks[i] > 0
+  results$ms2_n_peaks <- ms2$n_peaks[i]; results$ms2_n_files <- ms2$n_files[i]
+  results$ms2_best_purity <- ms2$best_purity[i]; results$ms2_spectrum_method <- ms2$spectrum_method[i]
+} else {
+  for (k in ms2_cols) results[[k]] <- NA
+}
+if (nrow(results) != n_rows_4b) stop("Row count changed while adding prediction / MS2 columns: ", n_rows_4b, " -> ", nrow(results))
 
 # Join with compound metadata
 results <- left_join(results, db_metafile, by = "compound_id")
@@ -477,3 +642,76 @@ if (!is.null(feature_groups)) {
 write_xlsx(results, output_name)
 cat(sprintf("\nResults exported to: %s\n", output_name))
 cat(sprintf("Total annotations: %d\n", nrow(results)))
+
+
+# =============================================================================
+# Section 9: Compress intermediates, write run_info.txt
+# =============================================================================
+
+# Row count of Stage 1 before compression (header excluded)
+stage1_file <- file.path(outloc, "Stage1_mass_matched.txt")
+n_stage1 <- if (file.exists(stage1_file)) length(readLines(stage1_file)) - 1L else NA_integer_
+
+# gzip each Stage file; the original is removed only after the decompressed copy is byte-identical
+gzip_verified <- function(f) {
+  raw_in <- readBin(f, "raw", file.size(f))
+  gz <- paste0(f, ".gz")
+  con <- gzfile(gz, "wb"); writeBin(raw_in, con); close(con)
+  con <- gzfile(gz, "rb"); raw_back <- readBin(con, "raw", length(raw_in) + 1L); close(con)
+  if (!identical(raw_in, raw_back)) stop("gzip check failed for ", f, "; uncompressed file kept")
+  file.remove(f)
+  gz
+}
+stage_files <- list.files(outloc, pattern = "^Stage.*\\.txt$", full.names = TRUE)
+gz_files <- vapply(stage_files, gzip_verified, "")
+cat(sprintf("Compressed %d Stage files in %s\n", length(gz_files), outloc))
+
+conf_tab <- table(factor(results$Confidence, levels = 0:4))
+run_info <- c(
+  sprintf("run_info: xMSannotator, %s %s, database %s", study_id, lc_mode, db_out),
+  sprintf("written: %s", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
+  sprintf("run_time_min: %.1f", as.numeric(difftime(Sys.time(), run_start, units = "mins"))),
+  "",
+  "[database]",
+  sprintf("array_index: %s (mapfile Number %s, %s mode)", config$array_index, db_ls[[ii, "Number"]], charge_type),
+  sprintf("File_name_out: %s", db_out),
+  sprintf("DB_name: %s (md5 %s)", compound_db_path, unname(tools::md5sum(compound_db_path))),
+  sprintf("Meta_File: %s (md5 %s)", db_metafile_path, unname(tools::md5sum(db_metafile_path))),
+  sprintf("mapfile: %s (md5 %s)", config$db_mapfile_path, unname(tools::md5sum(config$db_mapfile_path))),
+  sprintf("compounds after polarity filter: %d", nrow(compound_table)),
+  "",
+  "[inputs]",
+  sprintf("feature_table: %s", feature_table_path),
+  sprintf("feature_groups: %s", if (use_feature_groups) feature_groups_path else "none"),
+  sprintf("sample_mapfile: %s", mapfile_path),
+  sprintf("features: %d | samples: %d", nrow(peak_table), length(sample_cols)),
+  "",
+  "[versions]",
+  sprintf("CLUES.xMSannotator: %s", as.character(packageVersion("CLUES.xMSannotator"))),
+  sprintf("R: %s", R.version.string),
+  sprintf("runscript: %s (md5 %s)", if (length(runscript_path) == 1) runscript_path else "unknown", runscript_md5),
+  "",
+  "[settings]",
+  sprintf("%s: %s", names(settings), vapply(settings, fmt_setting, "")),
+  sprintf("%s: %s", names(db_settings), vapply(db_settings, fmt_setting, "")),
+  "",
+  "[added columns]",
+  sprintf("rt_esi_predictions: %s", if (use_rt_esi) sprintf("%s (md5 %s)", rt_esi_file, unname(tools::md5sum(rt_esi_file))) else "none"),
+  sprintf("rt_window95_sec: %s | rt_void_sec: %s", rt_window95, rt_void),
+  sprintf("rows with rt_pred_sec: %d (structure %d, formula_members %d) | within window95: %d | not in prediction file: %d",
+          sum(!is.na(results$rt_pred_sec)), sum(results$rt_pred_source %in% "structure"), sum(results$rt_pred_source %in% "formula_members"),
+          sum(results$rt_pred_within_w95 %in% TRUE), sum(results$rt_esi_no_prediction_reason %in% "not_in_prediction_file")),
+  sprintf("ms2_features: %s", if (use_ms2) sprintf("%s (md5 %s)", ms2_features_path, unname(tools::md5sum(ms2_features_path))) else "none"),
+  sprintf("rows with has_ms2: %d | features with has_ms2: %d", sum(results$has_ms2 %in% TRUE), length(unique(results$feature_id[results$has_ms2 %in% TRUE]))),
+  "",
+  "[counts]",
+  sprintf("stage1_mass_matches: %s", n_stage1),
+  sprintf("xlsx_rows (%s): %d", final_stage, nrow(results)),
+  sprintf("annotated_features: %d | compounds: %d", length(unique(results$feature_id)), length(unique(results$compound_id))),
+  sprintf("rows_by_confidence: %s", paste(names(conf_tab), conf_tab, sep = "=", collapse = " ")),
+  "",
+  "[files]",
+  sprintf("%s (md5 %s)", basename(output_name), unname(tools::md5sum(output_name))),
+  sprintf("intermediate/%s", basename(gz_files)))
+writeLines(run_info, file.path(db_dir, "run_info.txt"))
+cat(sprintf("Run record: %s\n", file.path(db_dir, "run_info.txt")))
