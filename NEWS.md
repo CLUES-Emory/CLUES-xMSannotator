@@ -1,3 +1,23 @@
+# CLUES.xMSannotator 1.4.0
+
+## Runscripts: prediction and MS2 columns (no package code change)
+
+* MultiDB runscript, Section 8: before the METADATA and feature joins, the
+  Stage 4b rows get these columns. Rows, confidence and scores are unchanged.
+  * **RT and ionization-mode predictions, by `compound_id`:** from the
+    reference-library folder `predictions/<release>/xmsannotator_<bundle>/`.
+    This is a new optional argument 11 (`rt_esi_prediction_dir` in
+    `run_CLUES_xMSannotator.sh`). The columns are `rt_pred_sec`,
+    `rt_pred_min_sec` / `rt_pred_max_sec` (formula rows: the range of the member
+    structures), `rt_pred_source`, `rt_pred_error_sec`, `rt_pred_within_w95`,
+    `p_detected`, `is_rt_standard` and `rt_esi_no_prediction_reason`.
+  * **Step 1 Stage 4 MS2, by `feature_id`:** from
+    `4-<mode>_<study>_MS2_Extraction/<mode>-<study>_MS2_Features.txt`. The
+    columns are `ms2_status` (`none` when no MS2 scan matched), `has_ms2`,
+    `ms2_n_peaks`, `ms2_n_files`, `ms2_best_purity` and `ms2_spectrum_method`.
+  * Without the predictions or the MS2 file, these columns are NA.
+    `run_info.txt` and the README record the files, with their md5.
+
 # CLUES.xMSannotator 1.3.0
 
 ## Runscripts: output layout (no package code change)

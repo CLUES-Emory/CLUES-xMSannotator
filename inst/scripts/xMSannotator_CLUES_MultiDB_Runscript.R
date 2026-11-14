@@ -1,7 +1,7 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-11-13 (CLUES.xMSannotator 1.3.0)
+# Date: 2026-11-13 (CLUES.xMSannotator 1.4.0)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
 # Output: <output_dir>/<mode>/7-<mode>_<study>_xMSannotator/
@@ -39,7 +39,8 @@ debug_config <- list(
   fc_threshold       = 5,
   n_cores            = 10,
   db_mapfile_path    = "/clues/.../Compound_Database_Mapfile_v3.xlsx",
-  blank_names        = "Water,Blank"
+  blank_names        = "Water,Blank",
+  rt_esi_prediction_dir = ""          # optional: predictions/<release>/xmsannotator_<bundle>/ of the reference library
 )
 
 # --- Parse configuration from CLI args or debug_config ---
@@ -57,7 +58,8 @@ parse_config <- function(input) {
       fc_threshold       = as.numeric(input[7]),
       n_cores            = as.numeric(input[8]),
       db_mapfile_path    = input[9],
-      blank_names        = input[10]
+      blank_names        = input[10],
+      rt_esi_prediction_dir = if (length(input) >= 11) input[11] else ""   # optional (1.4.0)
     )
   }
   cfg
@@ -134,6 +136,31 @@ n_workers <- config$n_cores
 
 # Feature ID column name
 feature_id_column <- "feature_id"
+
+# Step 1 Stage 4 MS2 features (v1.8.5+): one row per feature with matched DDA MS2 scans. Joined to the Stage 4b rows
+# (Section 8); without the file (no DDA data, older Step 1) the MS2 columns are NA.
+ms2_features_path <- file.path(outloc_base, paste0("4-", lc_mode, "_", study_id, "_MS2_Extraction"),
+                               paste0(lc_mode, "-", study_id, "_MS2_Features.txt"))
+use_ms2 <- file.exists(ms2_features_path)
+cat(sprintf("MS2 features:   %s\n", if (use_ms2) ms2_features_path else paste("none (", ms2_features_path, "not found): MS2 columns NA")))
+
+# RT and ionization-mode predictions for the database bundle (reference-library predictions/<release>/xmsannotator_<bundle>/,
+# built by 7-Data_Annotation/RT_ESI_Prediction/predict_rt_esi_bundle.R). Optional: without it the prediction columns are NA.
+rt_esi_dir <- config$rt_esi_prediction_dir
+use_rt_esi <- length(rt_esi_dir) == 1 && !is.na(rt_esi_dir) && nzchar(rt_esi_dir)
+rt_esi_file <- NA_character_; rt_window95 <- NA_real_; rt_void <- NA_real_
+if (use_rt_esi) {
+  rt_esi_file <- file.path(rt_esi_dir, sprintf("xmsannotator_rt_esi_predictions_%s.csv", lc_mode))
+  ms_file <- file.path(rt_esi_dir, "model_summary.csv")
+  if (!file.exists(rt_esi_file) || !file.exists(ms_file)) {
+    stop("rt_esi_prediction_dir is set but ", basename(rt_esi_file), " or model_summary.csv is missing in ", rt_esi_dir)
+  }
+  rt_ms <- read.csv(ms_file)
+  if (!lc_mode %in% rt_ms$lc_mode) stop("model_summary.csv in ", rt_esi_dir, " has no row for ", lc_mode)
+  rt_window95 <- rt_ms$window95_sec[rt_ms$lc_mode == lc_mode]; rt_void <- rt_ms$void_sec[rt_ms$lc_mode == lc_mode]
+}
+cat(sprintf("RT / ESI pred.: %s\n", if (use_rt_esi) sprintf("%s (window95 %.2f s, void %s s)", rt_esi_file, rt_window95, rt_void) else
+  "none (rt_esi_prediction_dir not set): prediction columns NA"))
 
 
 # =============================================================================
@@ -452,7 +479,23 @@ readme <- c(
   "## Inputs",
   sprintf("- Feature table: `%s`", feature_table_path),
   sprintf("- Feature groups: `%s`", if (use_feature_groups) feature_groups_path else "none"),
-  sprintf("- Sample mapfile: `%s` (blank sample types removed: %s)", mapfile_path, paste(blank_names, collapse = ", ")), "",
+  sprintf("- Sample mapfile: `%s` (blank sample types removed: %s)", mapfile_path, paste(blank_names, collapse = ", ")),
+  sprintf("- MS2 features (Step 1 Stage 4): `%s`", if (use_ms2) ms2_features_path else "none"),
+  sprintf("- RT / ionization-mode predictions: %s", if (use_rt_esi) sprintf("`%s` (md5 %s; window95 %.2f s, void %s s)", rt_esi_file,
+          unname(tools::md5sum(rt_esi_file)), rt_window95, rt_void) else "none"), "",
+  "## Columns added to the Stage 4b rows (before the METADATA and feature joins)",
+  "Confidence, score and the rows are unchanged; these columns are information only.",
+  "- `rt_pred_sec`: predicted RT of the compound (formula rows, e.g. HMDB `HMF_`: median of the member structures);",
+  "  `rt_pred_min_sec` / `rt_pred_max_sec`: for formula rows, the range of the members' predictions (not an error bar);",
+  "  `rt_pred_source`: structure / formula_members; `rt_pred_error_sec` = observed RT - `rt_pred_sec`;",
+  "  `rt_pred_within_w95`: |observed - predicted| <= window95 (formula rows: observed within [min - window95, max + window95]),",
+  "  both RTs clipped at the void time as in the model's cross-validation; `p_detected`: predicted probability that the",
+  "  compound is detected in this polarity (formula rows: highest member); `is_rt_standard`: a training standard of the RT",
+  "  model; `rt_esi_no_prediction_reason`.",
+  "- `ms2_status` (Step 1 Stage 4: acquired / isotope_triggered_only / assigned_to_other_feature / no_survey_signal; none =",
+  "  no MS2 scan matched the feature); `has_ms2` (acquired with a spectrum); `ms2_n_peaks`; `ms2_n_files`;",
+  "  `ms2_best_purity` (share of the isolation-window ion signal that belongs to the feature in the best scan, 0-1);",
+  "  `ms2_spectrum_method`. The spectra are in the Step 1 `4-` folder (MSP / MGF).", "",
   "## Versions",
   sprintf("- CLUES.xMSannotator %s; %s", as.character(packageVersion("CLUES.xMSannotator")), R.version.string),
   sprintf("- Runscript: `%s` (md5 %s)", if (length(runscript_path) == 1) runscript_path else "unknown", runscript_md5), "",
@@ -537,6 +580,41 @@ if (redundancy_filtering) {
 # quote "" that read.table accepts reads every row; files without such a quote read as before.
 results <- read.table(text = gsub('\\"', '""', readLines(results_file), fixed = TRUE), sep = "\t", header = TRUE)
 
+# --- Columns added to the Stage 4b rows before the metadata joins (1.4.0); rows, confidence and score unchanged ---
+n_rows_4b <- nrow(results)
+rt_obs <- results[[if ("time.x" %in% names(results)) "time.x" else "time"]]
+pred_cols <- c("rt_pred_sec", "rt_pred_min_sec", "rt_pred_max_sec", "rt_pred_source", "p_detected", "is_rt_standard", "rt_esi_no_prediction_reason")
+if (use_rt_esi) {
+  pr <- data.table::fread(rt_esi_file, colClasses = c(compound_id = "character"), na.strings = "",
+                          select = c("compound_id", setdiff(pred_cols, "rt_esi_no_prediction_reason"), "no_prediction_reason"))
+  if (anyDuplicated(pr$compound_id)) stop("Duplicated compound_id in ", rt_esi_file)
+  data.table::setnames(pr, "no_prediction_reason", "rt_esi_no_prediction_reason")
+  results <- left_join(results, as.data.frame(pr), by = "compound_id")
+  results$rt_esi_no_prediction_reason[!results$compound_id %in% pr$compound_id] <- "not_in_prediction_file"
+  clip <- function(x) pmax(x, rt_void)   # as the cross-validation window: two unretained compounds count as equal
+  is_range <- results$rt_pred_source %in% "formula_members"
+  results$rt_pred_error_sec <- round(rt_obs - results$rt_pred_sec, 2)
+  results$rt_pred_within_w95 <- ifelse(is_range,
+    clip(rt_obs) >= clip(results$rt_pred_min_sec) - rt_window95 & clip(rt_obs) <= clip(results$rt_pred_max_sec) + rt_window95,
+    abs(clip(rt_obs) - clip(results$rt_pred_sec)) <= rt_window95)
+} else {
+  for (k in c(pred_cols, "rt_pred_error_sec", "rt_pred_within_w95")) results[[k]] <- NA
+}
+ms2_cols <- c("ms2_status", "has_ms2", "ms2_n_peaks", "ms2_n_files", "ms2_best_purity", "ms2_spectrum_method")
+if (use_ms2) {
+  ms2 <- data.table::fread(ms2_features_path, colClasses = c(feature_id = "character"),
+                           select = c("feature_id", "ms2_status", "n_peaks", "n_files", "best_purity", "spectrum_method"))
+  if (anyDuplicated(ms2$feature_id)) stop("Duplicated feature_id in ", ms2_features_path)
+  i <- match(results$feature_id, ms2$feature_id)
+  results$ms2_status <- ifelse(is.na(i), "none", ms2$ms2_status[i])   # none: no MS2 scan matched the feature
+  results$has_ms2 <- results$ms2_status == "acquired" & !is.na(ms2$n_peaks[i]) & ms2$n_peaks[i] > 0
+  results$ms2_n_peaks <- ms2$n_peaks[i]; results$ms2_n_files <- ms2$n_files[i]
+  results$ms2_best_purity <- ms2$best_purity[i]; results$ms2_spectrum_method <- ms2$spectrum_method[i]
+} else {
+  for (k in ms2_cols) results[[k]] <- NA
+}
+if (nrow(results) != n_rows_4b) stop("Row count changed while adding prediction / MS2 columns: ", n_rows_4b, " -> ", nrow(results))
+
 # Join with compound metadata
 results <- left_join(results, db_metafile, by = "compound_id")
 
@@ -616,6 +694,15 @@ run_info <- c(
   "[settings]",
   sprintf("%s: %s", names(settings), vapply(settings, fmt_setting, "")),
   sprintf("%s: %s", names(db_settings), vapply(db_settings, fmt_setting, "")),
+  "",
+  "[added columns]",
+  sprintf("rt_esi_predictions: %s", if (use_rt_esi) sprintf("%s (md5 %s)", rt_esi_file, unname(tools::md5sum(rt_esi_file))) else "none"),
+  sprintf("rt_window95_sec: %s | rt_void_sec: %s", rt_window95, rt_void),
+  sprintf("rows with rt_pred_sec: %d (structure %d, formula_members %d) | within window95: %d | not in prediction file: %d",
+          sum(!is.na(results$rt_pred_sec)), sum(results$rt_pred_source %in% "structure"), sum(results$rt_pred_source %in% "formula_members"),
+          sum(results$rt_pred_within_w95 %in% TRUE), sum(results$rt_esi_no_prediction_reason %in% "not_in_prediction_file")),
+  sprintf("ms2_features: %s", if (use_ms2) sprintf("%s (md5 %s)", ms2_features_path, unname(tools::md5sum(ms2_features_path))) else "none"),
+  sprintf("rows with has_ms2: %d | features with has_ms2: %d", sum(results$has_ms2 %in% TRUE), length(unique(results$feature_id[results$has_ms2 %in% TRUE]))),
   "",
   "[counts]",
   sprintf("stage1_mass_matches: %s", n_stage1),

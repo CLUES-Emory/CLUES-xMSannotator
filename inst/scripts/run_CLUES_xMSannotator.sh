@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #===============================================================================
 # xMSannotator CLUES Multi-Database Annotation Pipeline
-# Version: 1.3.0 (CLUES.xMSannotator)
+# Version: 1.4.0 (CLUES.xMSannotator)
 # Author: CLUES Lab, Emory University
 #
 # Description: SLURM batch script for xMSannotator annotation across multiple
@@ -63,6 +63,9 @@ study_dir="/clues/CLU0046.1_STUDY/"
 output_dir=""                       # Optional override ("" = derived): the Step 1 output_dir, if Step 1 used an override
 mapfile_dir=""                      # Optional override ("" = derived)
 db_mapfile="/clues/.../Compound_Database_Mapfile_v3.xlsx"
+# Optional: RT / ionization-mode predictions for this database bundle, the folder predictions/<release>/xmsannotator_<bundle>/
+# of the reference library (copied to the cluster). "" = no prediction columns.
+rt_esi_prediction_dir=""
 
 # Processing parameters
 n_cores=10                          # Must match --cpus-per-task
@@ -80,7 +83,7 @@ r_script="/clues/~Data_Extraction/xMSannotator/xMSannotator_CLUES_MultiDB_Runscr
 task_id="${SLURM_ARRAY_TASK_ID:-1}"
 output_dir="${output_dir:-${study_dir%/}/2-Data_Extraction/${lc_mode}/}"
 mapfile_dir="${mapfile_dir:-${study_dir%/}/1-mzML/${lc_mode}/}"
-for d in "$output_dir" "$mapfile_dir" "$db_mapfile"; do
+for d in "$output_dir" "$mapfile_dir" "$db_mapfile" ${rt_esi_prediction_dir:+"$rt_esi_prediction_dir"}; do
     if [[ ! -e "$d" ]]; then
         echo "ERROR: not found: $d (has Step 1 run? check study_dir / lc_mode / db_mapfile, or set the override)" >&2
         exit 1
@@ -104,6 +107,7 @@ echo "Blank Names:     ${blank_names}"
 echo "Output:          ${output_dir}"
 echo "Mapfiles:        ${mapfile_dir}"
 echo "DB Mapfile:      ${db_mapfile}"
+echo "RT/ESI pred.:    ${rt_esi_prediction_dir:-none}"
 echo ""
 
 # Load R module
@@ -126,7 +130,8 @@ Rscript "$r_script" \
     "$fc_threshold" \
     "$n_cores" \
     "$db_mapfile" \
-    "$blank_names" || exit_code=$?
+    "$blank_names" \
+    "$rt_esi_prediction_dir" || exit_code=$?
 
 # Print summary
 echo ""

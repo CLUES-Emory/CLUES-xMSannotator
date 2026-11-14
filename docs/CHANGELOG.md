@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Added
+- MultiDB runscript columns (1.4.0): RT / ionization-mode predictions (by `compound_id`; reference-library `predictions/<release>/xmsannotator_<bundle>/`, optional argument 11) and Step 1 Stage 4 MS2 status and purity (by `feature_id`) added to the Stage 4b rows before the metadata joins; rows, confidence and scores unchanged. See `NEWS.md`. (2026-11-13)
+
 ### Changed
 - MultiDB runscript output layout (1.3.0): `<mode>/7-<mode>_<study>_xMSannotator/<File_name_out>/` with the xlsx, `run_info.txt` (inputs with md5, versions, settings, counts) and `intermediate/` (Stage files gzipped after export, verified before the originals are removed); a README per mode in the step folder. Annotation results unchanged. See `NEWS.md`. (2026-11-13)
 
