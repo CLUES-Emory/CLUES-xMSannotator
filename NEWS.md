@@ -1,3 +1,39 @@
+# CLUES.xMSannotator 1.5.0
+
+## Runscripts: isomer score and rank (no package code change)
+
+* MultiDB runscript, Section 8: after the METADATA join, seven columns score
+  and rank the isomers of each annotation. Rows, confidence and scores are
+  unchanged.
+  * An annotation is one (`compound_id`, `rt_cluster`). All its rows (adducts,
+    isotopes) get the same values, so the rank belongs to the compound, not to
+    a feature.
+  * Isomers are annotations with the same `Formula` and the same set of
+    features. On CLU0162 (run 93, 20 database runs) xMSannotator gave such
+    annotations identical confidence and score in every case, and isomers that
+    shared a feature always shared the whole feature set.
+  * Terms, from the annotation's most intense row, each centred on the group
+    mean (a missing value counts as the group mean):
+    * `isomer_rt_term`: -0.5 (RT error / sigma)^2, sigma = window95 / 1.96.
+    * `isomer_ion_term`: ln(`p_detected`).
+    * `isomer_ref_term`: ln(`total_references` + 1). Blank counts (library
+      bundle v261115: no PubChem CID) and formula rows that sum several
+      structures count as missing.
+  * `isomer_score` = 1 x RT + 1 x ionization + 0.5 x references (new setting
+    `isomer_score_weights`, Section 6). `isomer_score_noref` leaves the
+    references out. `isomer_rank` is the rank of `isomer_score` in the group
+    (1 = best, ties share the rank). `isomer_group_n` counts the group; with no
+    isomer the score columns are empty.
+  * Calibration (run 97, CLU0162 C18, out-of-fold predictions):
+    * The score puts the true isomer alone first 607 / 775 times (Level 1
+      standards) and 119 / 174 (Level 2a MS2 matches, not standards).
+    * A sequential rank (RT window, then `p_detected`, then references) did
+      this 512 and 90 times.
+    * Weights fitted by conditional logistic regression gave references 0.54
+      and 0.46.
+    * Both truth sets are well-studied compounds, so the reference weight may
+      be too high for obscure ones.
+
 # CLUES.xMSannotator 1.4.0
 
 ## Runscripts: prediction and MS2 columns (no package code change)

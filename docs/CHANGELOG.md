@@ -3,6 +3,9 @@
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
 ### Added
+- MultiDB runscript isomer score and rank (1.5.0): per annotation (`compound_id`, `rt_cluster`), the same on all its adduct and isotope rows; isomers = same formula and feature set; `isomer_score` = RT term + ionization term + 0.5 x reference term (centred in the group; setting `isomer_score_weights`), plus `isomer_score_noref`, the three terms, `isomer_rank` and `isomer_group_n`. Calibrated in run 97 (CLU0162, out-of-fold). Rows, confidence and scores unchanged. See `NEWS.md`. (2026-11-15)
+
+### Added
 - MultiDB runscript columns (1.4.0): RT / ionization-mode predictions (by `compound_id`; reference-library `predictions/<release>/xmsannotator_<bundle>/`, optional argument 11) and Step 1 Stage 4 MS2 status and purity (by `feature_id`) added to the Stage 4b rows before the metadata joins; rows, confidence and scores unchanged. See `NEWS.md`. (2026-11-13)
 
 ### Changed

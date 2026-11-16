@@ -385,6 +385,12 @@ clustering_seed               <- 12345  # pins peak-module clustering; NULL leav
 min_ions_per_chemical         <- 2
 level1_primary_adducts       <- c("M+H", "M-H")  # adducts that qualify for Conf 1 as a single match
 
+# Isomer score (Section 8, 1.5.0): weights of the RT, ionization and reference terms. Run 97 (CLU0162 C18, out-of-fold;
+# truth = Level 1 standards, n 775 groups, and Level 2a MS2 matches, n 174): these fixed weights put the true isomer alone
+# first 607 / 119 times vs 512 / 90 for the earlier sequential rank; fitted weights gave references 0.54 / 0.46. Both truth
+# sets are well-studied compounds, so the reference weight may be too high for obscure ones (see isomer_score_noref).
+isomer_score_weights <- c(rt = 1, ion = 1, ref = 0.5)
+
 # Pathway settings
 pathway_mode                <- "skip"   # "skip", "HMDB", or "custom"
 pathway_data                <- NULL     # required if pathway_mode = "custom"
@@ -440,6 +446,7 @@ settings <- list(
   redundancy_filtering = redundancy_filtering, multi_rt_clusters = multi_rt_clusters, clustering_seed = clustering_seed,
   min_ions_per_chemical = min_ions_per_chemical, level1_primary_adducts = level1_primary_adducts,
   pathway_mode = pathway_mode, boosted_compounds = if (is.null(boosted_compounds)) NULL else paste(nrow(boosted_compounds), "rows"),
+  isomer_score_weights = paste(names(isomer_score_weights), isomer_score_weights, collapse = ", "),
   n_workers = n_workers)
 settings_lines <- sprintf("| %s | %s |", names(settings), vapply(settings, fmt_setting, ""))
 # adduct_weights depends on the database (bare-ion pseudo-adducts [M]+ ... for charged compounds): run_info.txt only
@@ -496,6 +503,20 @@ readme <- c(
   "  no MS2 scan matched the feature); `has_ms2` (acquired with a spectrum); `ms2_n_peaks`; `ms2_n_files`;",
   "  `ms2_best_purity` (share of the isolation-window ion signal that belongs to the feature in the best scan, 0-1);",
   "  `ms2_spectrum_method`. The spectra are in the Step 1 `4-` folder (MSP / MGF).", "",
+  "## Isomer score and rank (after the METADATA join)",
+  "An annotation is one (`compound_id`, `rt_cluster`); its rows (adducts, isotopes) share one set of values. Isomers =",
+  "annotations with the same `Formula` and the same set of features, which xMSannotator scores identically.",
+  "- `isomer_group_n`: annotations in the isomer group (1 = no isomer; the score columns are then empty).",
+  "- `isomer_rt_term`: -0.5 (RT error / sigma)^2, sigma = window95 / 1.96, both RTs clipped at the void (formula rows: distance",
+  "  outside the member range); `isomer_ion_term`: ln(`p_detected`); `isomer_ref_term`: ln(`total_references` + 1), missing",
+  "  when blank or when the row sums several structures. Each term from the annotation's most intense row and centred on",
+  "  the group mean, so 0 = group average (also used for a missing value).",
+  sprintf("- `isomer_score` = %s x RT + %s x ionization + %s x references (setting `isomer_score_weights`); `isomer_score_noref`",
+          isomer_score_weights[["rt"]], isomer_score_weights[["ion"]], isomer_score_weights[["ref"]]),
+  "  leaves the references out; `isomer_rank`: rank of `isomer_score` in the group (1 = best, ties share the rank).",
+  "- Information only: confidence, score and rows are unchanged. Weights from run 97 (CLU0162 C18, out-of-fold; truth =",
+  "  Level 1 standards and Level 2a MS2 matches, both well-studied compounds). `total_references` is a popularity prior,",
+  "  not evidence about the feature; use `isomer_score_noref` where that should not count.", "",
   "## Versions",
   sprintf("- CLUES.xMSannotator %s; %s", as.character(packageVersion("CLUES.xMSannotator")), R.version.string),
   sprintf("- Runscript: `%s` (md5 %s)", if (length(runscript_path) == 1) runscript_path else "unknown", runscript_md5), "",
@@ -617,6 +638,54 @@ if (nrow(results) != n_rows_4b) stop("Row count changed while adding prediction 
 
 # Join with compound metadata
 results <- left_join(results, db_metafile, by = "compound_id")
+
+# --- Isomer score and rank (1.5.0); rows, confidence and score unchanged ---
+# An annotation is one (compound_id, rt_cluster); all its rows (adducts, isotopes) get the same values. Isomers are
+# annotations with the same Formula and the same set of features: xMSannotator gives them identical confidence and score.
+# Terms, from the annotation's most intense row, each centred on the isomer group's mean (missing = the group mean, 0):
+#   RT: -0.5 * (error / sigma)^2, sigma = window95 / 1.96; error after clipping both RTs at the void time; formula rows
+#       (member range) use the distance outside [min, max].
+#   ionization: log(p_detected), p limited to [0.001, 0.999].
+#   references: log(total_references + 1); missing when blank or when the row sums several structures (n_member_structures > 1).
+# isomer_score = weighted sum (isomer_score_weights, Section 6); isomer_rank = rank of isomer_score in the group (1 = best,
+# ties share the rank). isomer_score_noref leaves the references out. Calibration: run 97 (CLU0162 C18, out-of-fold).
+n_rows_meta <- nrow(results)
+ann_key <- paste(results$compound_id, results$rt_cluster, sep = "\r")
+col_or_na <- function(k) if (k %in% names(results)) results[[k]] else rep(NA, nrow(results))
+num_col <- function(k) suppressWarnings(as.numeric(col_or_na(k)))
+o <- order(ann_key, -results$mean_int_vec)                     # most intense row first within each annotation
+top <- o[!duplicated(ann_key[o])]
+fset <- tapply(results$feature_id, ann_key, function(f) paste(sort(unique(f)), collapse = ","))
+rt_obs_now <- results[[if ("time.x" %in% names(results)) "time.x" else "time"]]   # this table's rows (after the METADATA join)
+ann <- data.frame(key = ann_key[top], formula = results$Formula[top], obs = rt_obs_now[top],
+                  pred = num_col("rt_pred_sec")[top], pmin_ = num_col("rt_pred_min_sec")[top], pmax_ = num_col("rt_pred_max_sec")[top],
+                  range = col_or_na("rt_pred_source")[top] %in% "formula_members",
+                  p = num_col("p_detected")[top], refs = num_col("total_references")[top],
+                  multi = num_col("n_member_structures")[top] > 1)
+ann$multi <- ann$multi %in% TRUE                               # NA (no such column, or blank) = a single structure
+grp <- paste(ann$formula, fset[ann$key], sep = "\r")
+vc <- function(x) pmax(x, rt_void)                             # void clip (NA when no predictions were given)
+rt_err <- ifelse(ann$range, pmax(0, vc(ann$pmin_) - vc(ann$obs), vc(ann$obs) - vc(ann$pmax_)), vc(ann$obs) - vc(ann$pred))
+centre <- function(v) { m <- ave(v, grp, FUN = function(z) if (all(is.na(z))) 0 else mean(z, na.rm = TRUE)); r <- v - m; r[is.na(r)] <- 0; r }
+ann$rt_term <- centre(-0.5 * (rt_err / (rt_window95 / 1.96))^2)
+ann$ion_term <- centre(log(pmin(pmax(ann$p, 0.001), 0.999)))
+ann$ref_term <- centre(ifelse(ann$multi, NA, log(ann$refs + 1)))
+w <- isomer_score_weights
+ann$score <- round(w[["rt"]] * ann$rt_term + w[["ion"]] * ann$ion_term + w[["ref"]] * ann$ref_term, 4)
+ann$score_noref <- round(w[["rt"]] * ann$rt_term + w[["ion"]] * ann$ion_term, 4)
+ann$isomer_group_n <- ave(seq_along(grp), grp, FUN = length)
+ann$isomer_rank <- ave(-ann$score, grp, FUN = function(v) rank(v, ties.method = "min"))
+single <- ann$isomer_group_n == 1                              # no isomer: rank 1, score and terms NA
+ann[single, c("score", "score_noref", "rt_term", "ion_term", "ref_term")] <- NA
+i <- match(ann_key, ann$key)
+results$isomer_group_n <- ann$isomer_group_n[i]
+results$isomer_rank <- as.integer(ann$isomer_rank[i])
+results$isomer_score <- ann$score[i]
+results$isomer_score_noref <- ann$score_noref[i]
+results$isomer_rt_term <- round(ann$rt_term[i], 4)
+results$isomer_ion_term <- round(ann$ion_term[i], 4)
+results$isomer_ref_term <- round(ann$ref_term[i], 4)
+if (nrow(results) != n_rows_meta || anyNA(results$isomer_rank)) stop("Isomer rank: row count changed or rank missing")
 
 # Merge feature table QA metadata. Names from Step 1 v1.6.0+ and from earlier
 # versions; intersect() below keeps those present in this table.
