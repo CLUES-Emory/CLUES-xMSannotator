@@ -68,13 +68,15 @@ Several columns are renamed from their internal names during output formatting (
 
 ## Interpreting Confidence
 
-| Level | Label | Evidence Required |
-|:-----:|-------|-------------------|
-| 4 | Confirmed | User-verified compound (via `boosted_compounds` parameter) |
-| 3 | High | Isotope rows + base adduct(s) + module/RT coherence |
-| 2 | Medium | 2+ distinct base adducts + module/RT coherence |
-| 1 | Low | Single primary adduct match (M+H or M-H) |
-| 0 | None | Insufficient evidence |
+| Level | Label | Evidence Required | `schymanski_level` (MultiDB runscript xlsx, 1.6.0) |
+|:-----:|-------|-------------------|:-----:|
+| 4 | Confirmed | User-verified compound (via `boosted_compounds` parameter) | 1 |
+| 3 | High | Isotope rows + base adduct(s) + module/RT coherence | 4a |
+| 2 | Medium | 2+ distinct base adducts + module/RT coherence | 4b |
+| 1 | Low | Single primary adduct match (M+H or M-H) | 5 |
+| 0 | None | Insufficient evidence | 5 |
+
+`schymanski_level` uses the Schymanski et al. 2014 scale (doi:10.1021/es5002105); 4a / 4b split Level 4 (molecular formula) by the evidence used and are not part of the 2014 scheme.
 
 For the complete confidence decision tree, see the [Pipeline Workflow Reference](xMSannotator_Workflow.md#stage-4--confidence-assignment).
 
@@ -91,6 +93,30 @@ For the complete confidence decision tree, see the [Pipeline Workflow Reference]
 
 ---
 
+## Columns added by the MultiDB runscript (xlsx)
+
+`inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R` writes `Stage4b_confidence_levels.txt` to an xlsx and adds the columns below. The rows, `Confidence` and `score` are unchanged. Each mode's generated `<mode>-<study>_xMSannotator_README.md` describes them for that run.
+
+| Version | Columns | Joined or computed by |
+|---|---|---|
+| 1.4.0 | `rt_pred_sec`, `rt_pred_min_sec`, `rt_pred_max_sec`, `rt_pred_source`, `rt_pred_error_sec`, `rt_pred_within_w95`, `p_detected`, `is_rt_standard`, `rt_esi_no_prediction_reason` | `compound_id`, from the reference-library prediction file (empty without one) |
+| 1.4.0 | `ms2_status`, `has_ms2`, `ms2_n_peaks`, `ms2_n_files`, `ms2_best_purity`, `ms2_spectrum_method` | `feature_id`, from Step 1 Stage 4 |
+| — | database METADATA columns (e.g. `cid`, `pubmed_count`, `patent_count`, `total_references`) | `compound_id` |
+| 1.5.0 | `isomer_group_n`, `isomer_rank`, `isomer_score`, `isomer_score_noref`, `isomer_rt_term`, `isomer_ion_term`, `isomer_ref_term` | per annotation (`compound_id`, `rt_cluster`), see below |
+| 1.6.0 | `schymanski_level` (placed after `Confidence`) | from `Confidence`, see [Interpreting Confidence](#interpreting-confidence) |
+| — | feature table QA columns, `feature_group` | `feature_id` |
+
+**Isomer score and rank (1.5.0).** Isomers are annotations with the same `Formula` and the same set of features; xMSannotator gives them identical `Confidence` and `score`. All rows of an annotation (adducts, isotopes) share one value.
+- `isomer_rt_term`: -0.5 (RT error / sigma)^2, sigma = window95 / 1.96, both RTs clipped at the void time.
+- `isomer_ion_term`: ln(`p_detected`), p limited to [0.001, 0.999].
+- `isomer_ref_term`: ln(`total_references` + 1); missing when the count is blank or the row sums several structures.
+- Each term is centred on the isomer group's mean; a missing value counts as the mean (0).
+- `isomer_score` = 1 x RT + 1 x ionization + 0.5 x references (setting `isomer_score_weights`). `isomer_score_noref` leaves the references out.
+- `isomer_rank` is the rank of `isomer_score` in the group (1 = best, ties share the rank). `isomer_group_n` is the group size; with no isomer the score columns are empty and the rank is 1.
+- The weights were calibrated on CLU0162 C18 with out-of-fold predictions (truth: Level 1 standards and Level 2a MS2 matches, both well-studied compounds). `total_references` is a popularity prior, not evidence about the feature.
+
+---
+
 ## See Also
 
 - [Pipeline Workflow Reference](xMSannotator_Workflow.md) — full algorithmic details for each stage
@@ -99,4 +125,4 @@ For the complete confidence decision tree, see the [Pipeline Workflow Reference]
 ---
 
 *Document created: 2026-03-14*
-*For use with CLUES.xMSannotator v1.0.0*
+*For use with CLUES.xMSannotator v1.0.0; MultiDB runscript columns and `schymanski_level` added 2026-11-16 (v1.6.0)*

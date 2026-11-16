@@ -1,7 +1,7 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-11-13 (CLUES.xMSannotator 1.4.0)
+# Date: 2026-11-16 (CLUES.xMSannotator 1.6.0)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
 # Output: <output_dir>/<mode>/7-<mode>_<study>_xMSannotator/
@@ -517,6 +517,15 @@ readme <- c(
   "- Information only: confidence, score and rows are unchanged. Weights from run 97 (CLU0162 C18, out-of-fold; truth =",
   "  Level 1 standards and Level 2a MS2 matches, both well-studied compounds). `total_references` is a popularity prior,",
   "  not evidence about the feature; use `isomer_score_noref` where that should not count.", "",
+  "## Schymanski level (column after `Confidence`)",
+  "`schymanski_level` restates `Confidence` on the Schymanski et al. 2014 scale (doi:10.1021/es5002105); `Confidence` is",
+  "unchanged. Level 4 (molecular formula) is split by the evidence xMSannotator used; 4a / 4b are this pipeline's split.",
+  "- `4a`: Confidence 3 (isotope rows and an adduct, module and RT coherent).",
+  "- `4b`: Confidence 2 (two or more adducts, coherent).",
+  "- `5`: Confidence 1 (a single M+H / M-H) and 0 (exact mass only).",
+  "- `1`: Confidence 4 (`boosted_compounds`, user-confirmed).",
+  "The named structure is one candidate for the formula; isomers are ordered by `isomer_rank`, not given a higher level.",
+  "Level 1 (authentic standards, Step 2) and Level 2a (MS2 library matches, Step 3) are not joined here.", "",
   "## Versions",
   sprintf("- CLUES.xMSannotator %s; %s", as.character(packageVersion("CLUES.xMSannotator")), R.version.string),
   sprintf("- Runscript: `%s` (md5 %s)", if (length(runscript_path) == 1) runscript_path else "unknown", runscript_md5), "",
@@ -686,6 +695,15 @@ results$isomer_rt_term <- round(ann$rt_term[i], 4)
 results$isomer_ion_term <- round(ann$ion_term[i], 4)
 results$isomer_ref_term <- round(ann$ref_term[i], 4)
 if (nrow(results) != n_rows_meta || anyNA(results$isomer_rank)) stop("Isomer rank: row count changed or rank missing")
+
+# --- Schymanski level from Confidence (1.6.0); Confidence itself unchanged ---
+# Schymanski et al. 2014 (doi:10.1021/es5002105). Level 4 (molecular formula) is split by the evidence xMSannotator used:
+# 3 (isotope rows + adduct) -> 4a; 2 (two or more adducts) -> 4b; 1 (single M+H / M-H) and 0 -> 5 (exact mass);
+# 4 (boosted_compounds, user-confirmed) -> 1. "4a" / "4b" are this pipeline's split, not part of the 2014 scheme.
+schymanski_map <- c("0" = "5", "1" = "5", "2" = "4b", "3" = "4a", "4" = "1")
+schymanski_level <- unname(schymanski_map[as.character(results$Confidence)])
+if (anyNA(schymanski_level)) stop("Schymanski level: Confidence outside 0-4")
+results <- tibble::add_column(results, schymanski_level = schymanski_level, .after = "Confidence")
 
 # Merge feature table QA metadata. Names from Step 1 v1.6.0+ and from earlier
 # versions; intersect() below keeps those present in this table.

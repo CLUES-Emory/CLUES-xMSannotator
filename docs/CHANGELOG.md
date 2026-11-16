@@ -3,6 +3,9 @@
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
 ### Added
+- MultiDB runscript `schymanski_level` column (1.6.0), placed after `Confidence`: Confidence 3 -> 4a, 2 -> 4b, 1 and 0 -> 5, 4 (boosted) -> 1 (Schymanski et al. 2014; 4a / 4b are this pipeline's split of Level 4). `Confidence`, scores and rows unchanged. See `NEWS.md`. (2026-11-16)
+
+### Added
 - MultiDB runscript isomer score and rank (1.5.0): per annotation (`compound_id`, `rt_cluster`), the same on all its adduct and isotope rows; isomers = same formula and feature set; `isomer_score` = RT term + ionization term + 0.5 x reference term (centred in the group; setting `isomer_score_weights`), plus `isomer_score_noref`, the three terms, `isomer_rank` and `isomer_group_n`. Calibrated in run 97 (CLU0162, out-of-fold). Rows, confidence and scores unchanged. See `NEWS.md`. (2026-11-15)
 
 ### Added

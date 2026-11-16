@@ -1,3 +1,30 @@
+# CLUES.xMSannotator 1.6.0
+
+## Runscripts: Schymanski level column (no package code change)
+
+* MultiDB runscript, Section 8: new column `schymanski_level`, placed after
+  `Confidence`, restating it on the Schymanski et al. (2014) scale
+  (doi:10.1021/es5002105). `Confidence`, scores and rows are unchanged.
+  * `4a` = Confidence 3 (isotope rows and an adduct, module and RT coherent);
+    `4b` = Confidence 2 (two or more adducts, coherent); `5` = Confidence 1
+    (single M+H / M-H) and 0; `1` = Confidence 4 (`boosted_compounds`).
+  * 4a / 4b split Level 4 (molecular formula) by the evidence used; the split
+    is this pipeline's, not part of the 2014 scheme.
+  * On CLU0162 (run 93), features whose best annotation is Confidence 3 or 2
+    carry one formula at that level in 94.8-98.0% of cases (per feature and
+    database); Confidence 1 and 0 in 80.9-92.0%.
+  * Level 1 (Step 2 standards) and Level 2a (Step 3 MS2 matches) are not
+    joined into this column.
+
+## Documentation
+
+* `docs/Stage5_Output_Reference.md`: new section listing the columns the
+  MultiDB runscript adds to the xlsx (1.4.0 prediction and MS2 columns,
+  METADATA, 1.5.0 isomer score and rank, 1.6.0 `schymanski_level`), and a
+  `schymanski_level` column in the confidence table.
+* `readme.md`, `docs/README.md`: Schymanski level note and runscript
+  descriptions updated.
+
 # CLUES.xMSannotator 1.5.0
 
 ## Runscripts: isomer score and rank (no package code change)

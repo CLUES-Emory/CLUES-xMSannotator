@@ -24,7 +24,7 @@ An updated fork of [RECETOX/recetox-xMSannotator](https://github.com/RECETOX/rec
 | Script | Description |
 |--------|-------------|
 | [Example Runscript](inst/scripts/xMSannotator_CLUES_Runscript_Example.R) | Complete single-database annotation workflow; reads Step 1 Stage 3 feature groups when `feature_groups_path` is set |
-| [Multi-DB Runscript](inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R) | SLURM array job script for multi-database annotation; reads Step 1 Stage 3 feature groups when the file exists, otherwise WGCNA |
+| [Multi-DB Runscript](inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R) | SLURM array job script for multi-database annotation; reads Step 1 Stage 3 feature groups when the file exists, otherwise WGCNA. Adds RT / ionization predictions and MS2 status (1.4.0), an isomer score and rank (1.5.0) and `schymanski_level` (1.6.0) to the xlsx; see [Output Column Reference](docs/Stage5_Output_Reference.md#columns-added-by-the-multidb-runscript-xlsx) |
 | [SLURM Wrapper](inst/scripts/run_CLUES_xMSannotator.sh) | Bash/SLURM submission script for dual-polarity batch jobs |
 
 ### recetox-xMSannotator Developer & Legacy Docs
@@ -82,6 +82,8 @@ Each annotation receives a numeric `Confidence` level (0-4) and a human-readable
 **Primary adducts**: The `level1_primary_adducts` parameter (default: `c("M+H", "M-H")`) controls which adducts qualify for Confidence 1 as a single match. This is independent of `filter_by`, allowing `filter_by = NULL` for equal scoring while still requiring primary ion evidence for Level 1.
 
 For the complete confidence decision tree with worked examples, see the [Pipeline Workflow Reference](docs/xMSannotator_Workflow.md#stage-4--confidence-assignment).
+
+**Schymanski level (MultiDB runscript, 1.6.0)**: the xlsx written by the MultiDB runscript has a `schymanski_level` column after `Confidence`: Confidence 3 = `4a`, 2 = `4b`, 1 and 0 = `5`, 4 = `1` (Schymanski et al. 2014, doi:10.1021/es5002105). Level 4 (molecular formula) is split by the evidence used; 4a / 4b are this pipeline's split, not part of the 2014 scheme. `Confidence` is unchanged. Level 1 (authentic standards) and Level 2a (MS2 library matches) from the HighResolutionExposomics workflow are not joined into this column.
 
 ## Summary of CLUES-Emory Changes
 

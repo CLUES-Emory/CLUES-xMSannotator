@@ -16,7 +16,7 @@
 | Script | Description |
 |--------|-------------|
 | [Example Runscript](../inst/scripts/xMSannotator_CLUES_Runscript_Example.R) | Complete single-database annotation workflow with configuration, pre-processing (Step 1 feature groups or fold-change filter), annotation, and result export |
-| [Multi-DB Runscript](../inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R) | SLURM array job R script for multi-database annotation with CLI argument support; reads Step 1 Stage 3 feature groups when present |
+| [Multi-DB Runscript](../inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R) | SLURM array job R script for multi-database annotation with CLI argument support; reads Step 1 Stage 3 feature groups when present. Adds prediction and MS2 columns (1.4.0), an isomer score and rank (1.5.0) and `schymanski_level` (1.6.0) to the xlsx; see [Output Column Reference](Stage5_Output_Reference.md#columns-added-by-the-multidb-runscript-xlsx) |
 | [SLURM Wrapper](../inst/scripts/run_CLUES_xMSannotator.sh) | Bash/SLURM submission script for dual-polarity (pos/neg) batch jobs across multiple compound databases |
 
 ## Developer & Legacy Documentation
