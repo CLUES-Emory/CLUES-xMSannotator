@@ -1,3 +1,20 @@
+# CLUES.xMSannotator 1.7.0
+
+## Output: no duplicated mz / time columns
+
+* `advanced_annotation()`: the feature ID is joined by `peak` from a lookup
+  that also holds each peak's `mz` and `time` (kept for the (mz, time)
+  fallback join). Those copies came through the `peak` join as well, so the
+  Stage files and the runscript xlsx had `mz.x` / `mz.y` and `time.x` /
+  `time.y` with identical values (CLU0162 run 99: 374,209 of 374,209 rows).
+  The `peak` joins (`safe_join_feature_id()`, both Stage 1 files) now take
+  only `peak` and the ID column.
+  * Stage 2, 3, 4a, 4b, 5 and the xlsx: `mz`, `time` (were `mz.x`, `time.x`;
+    `mz.y`, `time.y` removed). Stage 1 files: `mz`, `rt` (the lookup's `time`
+    copy, equal to `rt`, removed). Values unchanged.
+  * Code reading `mz.x` / `time.x` must read `mz` / `time`. The MultiDB
+    runscript already reads `time.x` or else `time`.
+
 # CLUES.xMSannotator 1.6.0
 
 ## Runscripts: Schymanski level column (no package code change)

@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Fixed
+- Duplicated `mz.x` / `mz.y` and `time.x` / `time.y` columns in the Stage files and the runscript xlsx (1.7.0): the `peak` joins of the feature ID take only `peak` and the ID column; output columns are now `mz` and `time` (Stage 1: `mz`, `rt`). See `NEWS.md`. (2026-11-16)
+
 ### Added
 - MultiDB runscript `schymanski_level` column (1.6.0), placed after `Confidence`: Confidence 3 -> 4a, 2 -> 4b, 1 and 0 -> 5, 4 (boosted) -> 1 (Schymanski et al. 2014; 4a / 4b are this pipeline's split of Level 4). `Confidence`, scores and rows unchanged. See `NEWS.md`. (2026-11-16)
 

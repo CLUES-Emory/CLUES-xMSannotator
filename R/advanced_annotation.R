@@ -79,7 +79,8 @@ safe_join_feature_id <- function(data, feature_id_map, feature_id_column) {
   if (is.null(feature_id_column)) return(data)
   if (feature_id_column %in% names(data)) return(data)  # Already has it
   if ("peak" %in% names(data) && "peak" %in% names(feature_id_map)) {
-    return(left_join(data, feature_id_map, by = "peak"))
+    # Only the ID: the map's (mz, time) copies would duplicate data's own as mz.x / mz.y, time.x / time.y (1.7.0)
+    return(left_join(data, feature_id_map[, c("peak", feature_id_column)], by = "peak"))
   }
   # Fallback: join on (mz, time), keeping only unambiguous pairs.
   # Ambiguous pairs (multiple peaks sharing the same mz+time) get NA.
@@ -387,7 +388,7 @@ advanced_annotation <- function(peak_table,
   # ----------------------------
   stage1_annotation <- annotation
   if (!is.null(feature_id_map)) {
-    stage1_annotation <- left_join(stage1_annotation, feature_id_map, by = "peak")
+    stage1_annotation <- left_join(stage1_annotation, feature_id_map[, c("peak", feature_id_column)], by = "peak")
   }
   write.table(stage1_annotation, file = file.path(outloc, "Stage1_mass_matched.txt"), sep = "\t", row.names = FALSE)
   # ----------------------------
@@ -462,7 +463,7 @@ advanced_annotation <- function(peak_table,
     select(peak, mz, rt, mean_intensity, module, rt_cluster, Module_RTclust, mass_defect)
 
   if (!is.null(feature_id_map)) {
-    stage1_output <- left_join(stage1_output, feature_id_map, by = "peak")
+    stage1_output <- left_join(stage1_output, feature_id_map[, c("peak", feature_id_column)], by = "peak")
   }
   write.table(stage1_output, file = file.path(outloc, "Stage1_peak_clusters.txt"), sep = "\t", row.names = FALSE)
   # ----------------------------

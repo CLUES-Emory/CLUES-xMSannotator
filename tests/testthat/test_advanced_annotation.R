@@ -102,6 +102,17 @@ test_that("safe_join_feature_id uses peak key, no row duplication", {
   expect_equal(result$my_fid, c("F1", "F2", "F3"))
 })
 
+test_that("safe_join_feature_id by peak adds only the ID column (no mz.x / mz.y, time.x / time.y)", {
+  data <- data.frame(mz = c(100.05, 200.10), time = c(60.0, 120.0), peak = c(1L, 2L), compound = c("A", "B"))
+  fid_map <- data.frame(peak = c(1L, 2L), my_fid = c("F1", "F2"), mz = c(100.05, 200.10), time = c(60.0, 120.0))
+
+  result <- safe_join_feature_id(data, fid_map, "my_fid")
+
+  expect_equal(names(result), c(names(data), "my_fid"))
+  expect_equal(result$mz, data$mz)
+  expect_equal(result$time, data$time)
+})
+
 test_that("safe_join_feature_id (mz,time) fallback: ambiguous pairs get NA, not first-match", {
   # Two data rows with identical (mz, time) but originally from different peaks
   data <- data.frame(
