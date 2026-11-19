@@ -101,7 +101,7 @@ For the complete confidence decision tree, see the [Pipeline Workflow Reference]
 |---|---|---|
 | 1.4.0 | `rt_pred_sec`, `rt_pred_min_sec`, `rt_pred_max_sec`, `rt_pred_source`, `rt_pred_error_sec`, `rt_pred_within_w95`, `p_detected`, `is_rt_standard`, `rt_esi_no_prediction_reason` | `compound_id`, from the reference-library prediction file (empty without one) |
 | 1.4.0 | `ms2_status`, `has_ms2`, `ms2_n_peaks`, `ms2_n_files`, `ms2_best_purity`, `ms2_spectrum_method` | `feature_id`, from Step 1 Stage 4 |
-| — | database METADATA columns (e.g. `cid`, `pubmed_count`, `patent_count`, `total_references`) | `compound_id` |
+| — | database METADATA columns (e.g. `cid`, `pubmed_count`, `patent_count`, `total_references`) | `compound_id`; described in `DATA_DICTIONARY.md` in each database's output folder (1.8.0, copied from the library folder when the bundle has one) |
 | 1.5.0 | `isomer_group_n`, `isomer_rank`, `isomer_score`, `isomer_score_noref`, `isomer_rt_term`, `isomer_ion_term`, `isomer_ref_term` | per annotation (`compound_id`, `rt_cluster`), see below |
 | 1.6.0 | `schymanski_level` (placed after `Confidence`) | from `Confidence`, see [Interpreting Confidence](#interpreting-confidence) |
 | — | feature table QA columns, `feature_group` | `feature_id` |
@@ -125,4 +125,4 @@ For the complete confidence decision tree, see the [Pipeline Workflow Reference]
 ---
 
 *Document created: 2026-03-14*
-*For use with CLUES.xMSannotator v1.0.0; MultiDB runscript columns and `schymanski_level` added 2026-11-16 (v1.6.0)*
+*For use with CLUES.xMSannotator v1.0.0; MultiDB runscript columns and `schymanski_level` added 2026-11-16 (v1.6.0); `DATA_DICTIONARY.md` 2026-11-17 (v1.8.0)*

@@ -1,12 +1,13 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-11-16 (CLUES.xMSannotator 1.6.0)
+# Date: 2026-11-17 (CLUES.xMSannotator 1.8.0)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
 # Output: <output_dir>/<mode>/7-<mode>_<study>_xMSannotator/
 #           <mode>-<study>_xMSannotator_README.md         (written by every task, same content)
 #           <File_name_out>/<mode>-<study>_<File_name_out>_CLUES_Annotation.xlsx
+#           <File_name_out>/DATA_DICTIONARY.md             (copied from the METADATA file's folder, when it has one)
 #           <File_name_out>/run_info.txt                   (inputs, versions, settings, counts)
 #           <File_name_out>/intermediate/Stage*.txt.gz     (advanced_annotation() Stage files)
 ###############################################################################
@@ -466,6 +467,7 @@ readme <- c(
   sprintf("├── %s", basename(readme_path)),
   "└── <File_name_out>/                     one folder per database (table below)",
   sprintf("    ├── %s-%s_<File_name_out>_CLUES_Annotation.xlsx   the result", lc_mode, study_id),
+  "    ├── DATA_DICTIONARY.md               the database's columns (DB and METADATA files), from the library folder",
   "    ├── run_info.txt                     inputs and md5, versions, settings, counts, run time of this database",
   "    └── intermediate/                    advanced_annotation() Stage files, gzipped after the xlsx is written", "```", "",
   "A database folder with no xlsx, or with uncompressed `intermediate/*.txt`, is from a task that did not finish.", "",
@@ -473,6 +475,9 @@ readme <- c(
   sprintf("- **xlsx**: `%s` (one row per compound x adduct or isotope x feature) joined with the database METADATA file", final_stage),
   "  (by `compound_id`), the feature table QA columns (by `feature_id`) and the Step 1 `feature_group`. Column reference:",
   "  `docs/Stage5_Output_Reference.md` and `docs/xMSannotator_Workflow.md` of CLUES-xMSannotator.",
+  "- **DATA_DICTIONARY.md**: the database's own columns (the DB file's and the METADATA file's), copied unchanged from",
+  "  the folder of the METADATA file (the library folder of the bundle). The other xlsx columns are described here and in",
+  "  the column reference above. A library folder without the file gives no copy (`run_info.txt`: `data_dictionary: none`).",
   "- **intermediate/** (tab-separated, gzipped):",
   "  `Stage1_mass_matched` (mass matches), `Stage1_peak_clusters` (feature groups or WGCNA modules; same for every database),",
   "  `Stage2_isotope_detection`, `Stage3_chemical_scores`, `Stage3_pathway_*`, `Stage4_confidence_levels`,",
@@ -730,6 +735,13 @@ write_xlsx(results, output_name)
 cat(sprintf("\nResults exported to: %s\n", output_name))
 cat(sprintf("Total annotations: %d\n", nrow(results)))
 
+# --- Library data dictionary (1.8.0): copied unchanged from the METADATA file's folder; optional (older bundles have none) ---
+dict_src <- file.path(dirname(db_metafile_path), "DATA_DICTIONARY.md")
+dict_dst <- file.path(db_dir, "DATA_DICTIONARY.md")
+has_dict <- file.exists(dict_src)
+if (has_dict && !file.copy(dict_src, dict_dst, overwrite = TRUE)) stop("Could not copy ", dict_src, " to ", db_dir)
+cat(sprintf("Data dictionary: %s\n", if (has_dict) dict_dst else paste("none in", dirname(db_metafile_path))))
+
 
 # =============================================================================
 # Section 9: Compress intermediates, write run_info.txt
@@ -764,6 +776,8 @@ run_info <- c(
   sprintf("File_name_out: %s", db_out),
   sprintf("DB_name: %s (md5 %s)", compound_db_path, unname(tools::md5sum(compound_db_path))),
   sprintf("Meta_File: %s (md5 %s)", db_metafile_path, unname(tools::md5sum(db_metafile_path))),
+  sprintf("data_dictionary: %s", if (has_dict) sprintf("%s (md5 %s)", dict_src, unname(tools::md5sum(dict_src)))
+          else sprintf("none (no DATA_DICTIONARY.md in %s)", dirname(db_metafile_path))),
   sprintf("mapfile: %s (md5 %s)", config$db_mapfile_path, unname(tools::md5sum(config$db_mapfile_path))),
   sprintf("compounds after polarity filter: %d", nrow(compound_table)),
   "",
@@ -799,6 +813,7 @@ run_info <- c(
   "",
   "[files]",
   sprintf("%s (md5 %s)", basename(output_name), unname(tools::md5sum(output_name))),
+  if (has_dict) sprintf("DATA_DICTIONARY.md (md5 %s)", unname(tools::md5sum(dict_dst))),
   sprintf("intermediate/%s", basename(gz_files)))
 writeLines(run_info, file.path(db_dir, "run_info.txt"))
 cat(sprintf("Run record: %s\n", file.path(db_dir, "run_info.txt")))

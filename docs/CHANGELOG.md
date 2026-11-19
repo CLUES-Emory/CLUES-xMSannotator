@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Added
+- MultiDB runscript copies the library's `DATA_DICTIONARY.md` (from the METADATA file's folder, when present) into each `<File_name_out>/` output folder (1.8.0); source and md5 in `run_info.txt`, listed in the generated README. Annotation results unchanged. See `NEWS.md`. (2026-11-17)
+
 ### Fixed
 - Duplicated `mz.x` / `mz.y` and `time.x` / `time.y` columns in the Stage files and the runscript xlsx (1.7.0): the `peak` joins of the feature ID take only `peak` and the ID column; output columns are now `mz` and `time` (Stage 1: `mz`, `rt`). See `NEWS.md`. (2026-11-16)
 

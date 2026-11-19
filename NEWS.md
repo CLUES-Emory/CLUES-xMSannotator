@@ -1,3 +1,18 @@
+# CLUES.xMSannotator 1.8.0
+
+## MultiDB runscript: library data dictionary in the output
+
+* `xMSannotator_CLUES_MultiDB_Runscript.R` copies `DATA_DICTIONARY.md` from
+  the folder of the database's METADATA file (the library folder of the
+  bundle, e.g. `xMSannotator_Libraries_v261117/9-BloodExposome/`) into the
+  database's output folder `<File_name_out>/`, unchanged. It describes the
+  database's own columns (DB file and METADATA file). `run_info.txt` records
+  its source and md5 (`data_dictionary:` under `[database]`, and under
+  `[files]`); the generated README lists it.
+* Optional: bundles without the file (v261115 and earlier) give no copy and
+  `data_dictionary: none (...)` in `run_info.txt`. Annotation results are
+  unchanged.
+
 # CLUES.xMSannotator 1.7.0
 
 ## Output: no duplicated mz / time columns
