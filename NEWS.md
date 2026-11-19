@@ -1,3 +1,98 @@
+# CLUES.xMSannotator 1.8.0
+
+## MultiDB runscript: library data dictionary in the output
+
+* `xMSannotator_CLUES_MultiDB_Runscript.R` copies `DATA_DICTIONARY.md` from
+  the folder of the database's METADATA file (the library folder of the
+  bundle, e.g. `xMSannotator_Libraries_v261117/9-BloodExposome/`) into the
+  database's output folder `<File_name_out>/`, unchanged. It describes the
+  database's own columns (DB file and METADATA file). `run_info.txt` records
+  its source and md5 (`data_dictionary:` under `[database]`, and under
+  `[files]`); the generated README lists it.
+* Optional: bundles without the file (v261115 and earlier) give no copy and
+  `data_dictionary: none (...)` in `run_info.txt`. Annotation results are
+  unchanged.
+
+# CLUES.xMSannotator 1.7.0
+
+## Output: no duplicated mz / time columns
+
+* `advanced_annotation()`: the feature ID is joined by `peak` from a lookup
+  that also holds each peak's `mz` and `time` (kept for the (mz, time)
+  fallback join). Those copies came through the `peak` join as well, so the
+  Stage files and the runscript xlsx had `mz.x` / `mz.y` and `time.x` /
+  `time.y` with identical values (CLU0162 run 99: 374,209 of 374,209 rows).
+  The `peak` joins (`safe_join_feature_id()`, both Stage 1 files) now take
+  only `peak` and the ID column.
+  * Stage 2, 3, 4a, 4b, 5 and the xlsx: `mz`, `time` (were `mz.x`, `time.x`;
+    `mz.y`, `time.y` removed). Stage 1 files: `mz`, `rt` (the lookup's `time`
+    copy, equal to `rt`, removed). Values unchanged.
+  * Code reading `mz.x` / `time.x` must read `mz` / `time`. The MultiDB
+    runscript already reads `time.x` or else `time`.
+
+# CLUES.xMSannotator 1.6.0
+
+## Runscripts: Schymanski level column (no package code change)
+
+* MultiDB runscript, Section 8: new column `schymanski_level`, placed after
+  `Confidence`, restating it on the Schymanski et al. (2014) scale
+  (doi:10.1021/es5002105). `Confidence`, scores and rows are unchanged.
+  * `4a` = Confidence 3 (isotope rows and an adduct, module and RT coherent);
+    `4b` = Confidence 2 (two or more adducts, coherent); `5` = Confidence 1
+    (single M+H / M-H) and 0; `1` = Confidence 4 (`boosted_compounds`).
+  * 4a / 4b split Level 4 (molecular formula) by the evidence used; the split
+    is this pipeline's, not part of the 2014 scheme.
+  * On CLU0162 (run 93), features whose best annotation is Confidence 3 or 2
+    carry one formula at that level in 94.8-98.0% of cases (per feature and
+    database); Confidence 1 and 0 in 80.9-92.0%.
+  * Level 1 (Step 2 standards) and Level 2a (Step 3 MS2 matches) are not
+    joined into this column.
+
+## Documentation
+
+* `docs/Stage5_Output_Reference.md`: new section listing the columns the
+  MultiDB runscript adds to the xlsx (1.4.0 prediction and MS2 columns,
+  METADATA, 1.5.0 isomer score and rank, 1.6.0 `schymanski_level`), and a
+  `schymanski_level` column in the confidence table.
+* `readme.md`, `docs/README.md`: Schymanski level note and runscript
+  descriptions updated.
+
+# CLUES.xMSannotator 1.5.0
+
+## Runscripts: isomer score and rank (no package code change)
+
+* MultiDB runscript, Section 8: after the METADATA join, seven columns score
+  and rank the isomers of each annotation. Rows, confidence and scores are
+  unchanged.
+  * An annotation is one (`compound_id`, `rt_cluster`). All its rows (adducts,
+    isotopes) get the same values, so the rank belongs to the compound, not to
+    a feature.
+  * Isomers are annotations with the same `Formula` and the same set of
+    features. On CLU0162 (run 93, 20 database runs) xMSannotator gave such
+    annotations identical confidence and score in every case, and isomers that
+    shared a feature always shared the whole feature set.
+  * Terms, from the annotation's most intense row, each centred on the group
+    mean (a missing value counts as the group mean):
+    * `isomer_rt_term`: -0.5 (RT error / sigma)^2, sigma = window95 / 1.96.
+    * `isomer_ion_term`: ln(`p_detected`).
+    * `isomer_ref_term`: ln(`total_references` + 1). Blank counts (library
+      bundle v261115: no PubChem CID) and formula rows that sum several
+      structures count as missing.
+  * `isomer_score` = 1 x RT + 1 x ionization + 0.5 x references (new setting
+    `isomer_score_weights`, Section 6). `isomer_score_noref` leaves the
+    references out. `isomer_rank` is the rank of `isomer_score` in the group
+    (1 = best, ties share the rank). `isomer_group_n` counts the group; with no
+    isomer the score columns are empty.
+  * Calibration (run 97, CLU0162 C18, out-of-fold predictions):
+    * The score puts the true isomer alone first 607 / 775 times (Level 1
+      standards) and 119 / 174 (Level 2a MS2 matches, not standards).
+    * A sequential rank (RT window, then `p_detected`, then references) did
+      this 512 and 90 times.
+    * Weights fitted by conditional logistic regression gave references 0.54
+      and 0.46.
+    * Both truth sets are well-studied compounds, so the reference weight may
+      be too high for obscure ones.
+
 # CLUES.xMSannotator 1.4.0
 
 ## Runscripts: prediction and MS2 columns (no package code change)
