@@ -1,3 +1,20 @@
+# CLUES.xMSannotator 1.9.0
+
+## MultiDB runscript: no isomer rank without RT / ionization-mode predictions
+
+* Without `rt_esi_prediction_dir` the isomer score is not computed. Before,
+  the RT and ionization terms were 0 for every isomer, so `isomer_rank`
+  ordered isomers by `total_references` alone. Now `isomer_rank`,
+  `isomer_score`, `isomer_score_noref`, `isomer_rt_term`, `isomer_ion_term`
+  and `isomer_ref_term` are blank (NA). `isomer_group_n` is still filled,
+  and the column set is unchanged.
+* `run_info.txt` has `isomer_rank: computed` or `not computed (...)` under
+  `[added columns]`. The generated README says the columns are blank
+  without predictions and which case the run is.
+* With `rt_esi_prediction_dir` set, the output is unchanged.
+* Docs: `docs/Stage5_Output_Reference.md`, `readme.md` and the
+  `rt_esi_prediction_dir` comment in `run_CLUES_xMSannotator.sh`.
+
 # CLUES.xMSannotator 1.8.0
 
 ## MultiDB runscript: library data dictionary in the output

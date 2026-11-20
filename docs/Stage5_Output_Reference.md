@@ -102,7 +102,7 @@ For the complete confidence decision tree, see the [Pipeline Workflow Reference]
 | 1.4.0 | `rt_pred_sec`, `rt_pred_min_sec`, `rt_pred_max_sec`, `rt_pred_source`, `rt_pred_error_sec`, `rt_pred_within_w95`, `p_detected`, `is_rt_standard`, `rt_esi_no_prediction_reason` | `compound_id`, from the reference-library prediction file (empty without one) |
 | 1.4.0 | `ms2_status`, `has_ms2`, `ms2_n_peaks`, `ms2_n_files`, `ms2_best_purity`, `ms2_spectrum_method` | `feature_id`, from Step 1 Stage 4 |
 | — | database METADATA columns (e.g. `cid`, `pubmed_count`, `patent_count`, `total_references`) | `compound_id`; described in `DATA_DICTIONARY.md` in each database's output folder (1.8.0, copied from the library folder when the bundle has one) |
-| 1.5.0 | `isomer_group_n`, `isomer_rank`, `isomer_score`, `isomer_score_noref`, `isomer_rt_term`, `isomer_ion_term`, `isomer_ref_term` | per annotation (`compound_id`, `rt_cluster`), see below |
+| 1.5.0 | `isomer_group_n`, `isomer_rank`, `isomer_score`, `isomer_score_noref`, `isomer_rt_term`, `isomer_ion_term`, `isomer_ref_term` | per annotation (`compound_id`, `rt_cluster`), see below; all but `isomer_group_n` blank without a prediction file (1.9.0) |
 | 1.6.0 | `schymanski_level` (placed after `Confidence`) | from `Confidence`, see [Interpreting Confidence](#interpreting-confidence) |
 | — | feature table QA columns, `feature_group` | `feature_id` |
 
@@ -113,6 +113,7 @@ For the complete confidence decision tree, see the [Pipeline Workflow Reference]
 - Each term is centred on the isomer group's mean; a missing value counts as the mean (0).
 - `isomer_score` = 1 x RT + 1 x ionization + 0.5 x references (setting `isomer_score_weights`). `isomer_score_noref` leaves the references out.
 - `isomer_rank` is the rank of `isomer_score` in the group (1 = best, ties share the rank). `isomer_group_n` is the group size; with no isomer the score columns are empty and the rank is 1.
+- **Without RT / ionization-mode predictions** (`rt_esi_prediction_dir` not set; 1.9.0): the score is not computed. `isomer_rank`, `isomer_score`, `isomer_score_noref` and the three term columns are blank; `isomer_group_n` is still filled. Before 1.9.0 these runs got a rank from the references term alone (RT and ionization terms 0 for every isomer). `run_info.txt` says `isomer_rank: computed` or `not computed`.
 - The weights were calibrated on CLU0162 C18 with out-of-fold predictions (truth: Level 1 standards and Level 2a MS2 matches, both well-studied compounds). `total_references` is a popularity prior, not evidence about the feature.
 
 ---

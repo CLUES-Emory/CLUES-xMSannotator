@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Changed
+- MultiDB runscript (1.9.0): without RT / ionization-mode predictions (`rt_esi_prediction_dir` not set) the isomer score is not computed; `isomer_rank`, `isomer_score`, `isomer_score_noref` and the three term columns are blank, `isomer_group_n` still filled (before: a references-only rank). Unchanged with predictions. `run_info.txt` line `isomer_rank:`. See `NEWS.md`. (2026-11-20)
+
 ### Added
 - MultiDB runscript copies the library's `DATA_DICTIONARY.md` (from the METADATA file's folder, when present) into each `<File_name_out>/` output folder (1.8.0); source and md5 in `run_info.txt`, listed in the generated README. Annotation results unchanged. See `NEWS.md`. (2026-11-17)
 

@@ -64,7 +64,7 @@ output_dir=""                       # Optional override ("" = derived): the Step
 mapfile_dir=""                      # Optional override ("" = derived)
 db_mapfile="/clues/.../Compound_Database_Mapfile_v3.xlsx"
 # Optional: RT / ionization-mode predictions for this database bundle, the folder predictions/<release>/xmsannotator_<bundle>/
-# of the reference library (copied to the cluster). "" = no prediction columns.
+# of the reference library (copied to the cluster). "" = no prediction columns, and the isomer rank / score columns blank.
 rt_esi_prediction_dir=""
 
 # Processing parameters

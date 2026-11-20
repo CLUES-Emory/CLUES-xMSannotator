@@ -24,7 +24,7 @@ An updated fork of [RECETOX/recetox-xMSannotator](https://github.com/RECETOX/rec
 | Script | Description |
 |--------|-------------|
 | [Example Runscript](inst/scripts/xMSannotator_CLUES_Runscript_Example.R) | Complete single-database annotation workflow; reads Step 1 Stage 3 feature groups when `feature_groups_path` is set |
-| [Multi-DB Runscript](inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R) | SLURM array job script for multi-database annotation; reads Step 1 Stage 3 feature groups when the file exists, otherwise WGCNA. Adds RT / ionization predictions and MS2 status (1.4.0), an isomer score and rank (1.5.0) and `schymanski_level` (1.6.0) to the xlsx; see [Output Column Reference](docs/Stage5_Output_Reference.md#columns-added-by-the-multidb-runscript-xlsx) |
+| [Multi-DB Runscript](inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R) | SLURM array job script for multi-database annotation; reads Step 1 Stage 3 feature groups when the file exists, otherwise WGCNA. Adds RT / ionization predictions and MS2 status (1.4.0), an isomer score and rank (1.5.0; blank without the predictions, 1.9.0) and `schymanski_level` (1.6.0) to the xlsx; see [Output Column Reference](docs/Stage5_Output_Reference.md#columns-added-by-the-multidb-runscript-xlsx) |
 | [SLURM Wrapper](inst/scripts/run_CLUES_xMSannotator.sh) | Bash/SLURM submission script for dual-polarity batch jobs |
 
 ### recetox-xMSannotator Developer & Legacy Docs

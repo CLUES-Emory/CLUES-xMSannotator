@@ -1,7 +1,7 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-11-17 (CLUES.xMSannotator 1.8.0)
+# Date: 2026-11-20 (CLUES.xMSannotator 1.9.0)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
 # Output: <output_dir>/<mode>/7-<mode>_<study>_xMSannotator/
@@ -519,6 +519,9 @@ readme <- c(
   sprintf("- `isomer_score` = %s x RT + %s x ionization + %s x references (setting `isomer_score_weights`); `isomer_score_noref`",
           isomer_score_weights[["rt"]], isomer_score_weights[["ion"]], isomer_score_weights[["ref"]]),
   "  leaves the references out; `isomer_rank`: rank of `isomer_score` in the group (1 = best, ties share the rank).",
+  "- Without RT / ionization-mode predictions (`rt_esi_prediction_dir` not set) the score is not computed: `isomer_rank`,",
+  "  `isomer_score`, `isomer_score_noref` and the three term columns are blank; `isomer_group_n` is still filled.",
+  sprintf("  This run: %s.", if (use_rt_esi) "predictions given, rank and score computed" else "no predictions, rank and score columns blank"),
   "- Information only: confidence, score and rows are unchanged. Weights from run 97 (CLU0162 C18, out-of-fold; truth =",
   "  Level 1 standards and Level 2a MS2 matches, both well-studied compounds). `total_references` is a popularity prior,",
   "  not evidence about the feature; use `isomer_score_noref` where that should not count.", "",
@@ -663,6 +666,7 @@ results <- left_join(results, db_metafile, by = "compound_id")
 #   references: log(total_references + 1); missing when blank or when the row sums several structures (n_member_structures > 1).
 # isomer_score = weighted sum (isomer_score_weights, Section 6); isomer_rank = rank of isomer_score in the group (1 = best,
 # ties share the rank). isomer_score_noref leaves the references out. Calibration: run 97 (CLU0162 C18, out-of-fold).
+# Without RT / ionization-mode predictions (rt_esi_prediction_dir not set) only isomer_group_n is filled (1.9.0).
 n_rows_meta <- nrow(results)
 ann_key <- paste(results$compound_id, results$rt_cluster, sep = "\r")
 col_or_na <- function(k) if (k %in% names(results)) results[[k]] else rep(NA, nrow(results))
@@ -678,19 +682,25 @@ ann <- data.frame(key = ann_key[top], formula = results$Formula[top], obs = rt_o
                   multi = num_col("n_member_structures")[top] > 1)
 ann$multi <- ann$multi %in% TRUE                               # NA (no such column, or blank) = a single structure
 grp <- paste(ann$formula, fset[ann$key], sep = "\r")
-vc <- function(x) pmax(x, rt_void)                             # void clip (NA when no predictions were given)
-rt_err <- ifelse(ann$range, pmax(0, vc(ann$pmin_) - vc(ann$obs), vc(ann$obs) - vc(ann$pmax_)), vc(ann$obs) - vc(ann$pred))
-centre <- function(v) { m <- ave(v, grp, FUN = function(z) if (all(is.na(z))) 0 else mean(z, na.rm = TRUE)); r <- v - m; r[is.na(r)] <- 0; r }
-ann$rt_term <- centre(-0.5 * (rt_err / (rt_window95 / 1.96))^2)
-ann$ion_term <- centre(log(pmin(pmax(ann$p, 0.001), 0.999)))
-ann$ref_term <- centre(ifelse(ann$multi, NA, log(ann$refs + 1)))
-w <- isomer_score_weights
-ann$score <- round(w[["rt"]] * ann$rt_term + w[["ion"]] * ann$ion_term + w[["ref"]] * ann$ref_term, 4)
-ann$score_noref <- round(w[["rt"]] * ann$rt_term + w[["ion"]] * ann$ion_term, 4)
 ann$isomer_group_n <- ave(seq_along(grp), grp, FUN = length)
-ann$isomer_rank <- ave(-ann$score, grp, FUN = function(v) rank(v, ties.method = "min"))
-single <- ann$isomer_group_n == 1                              # no isomer: rank 1, score and terms NA
-ann[single, c("score", "score_noref", "rt_term", "ion_term", "ref_term")] <- NA
+if (use_rt_esi) {
+  vc <- function(x) pmax(x, rt_void)                           # void clip
+  rt_err <- ifelse(ann$range, pmax(0, vc(ann$pmin_) - vc(ann$obs), vc(ann$obs) - vc(ann$pmax_)), vc(ann$obs) - vc(ann$pred))
+  centre <- function(v) { m <- ave(v, grp, FUN = function(z) if (all(is.na(z))) 0 else mean(z, na.rm = TRUE)); r <- v - m; r[is.na(r)] <- 0; r }
+  ann$rt_term <- centre(-0.5 * (rt_err / (rt_window95 / 1.96))^2)
+  ann$ion_term <- centre(log(pmin(pmax(ann$p, 0.001), 0.999)))
+  ann$ref_term <- centre(ifelse(ann$multi, NA, log(ann$refs + 1)))
+  w <- isomer_score_weights
+  ann$score <- round(w[["rt"]] * ann$rt_term + w[["ion"]] * ann$ion_term + w[["ref"]] * ann$ref_term, 4)
+  ann$score_noref <- round(w[["rt"]] * ann$rt_term + w[["ion"]] * ann$ion_term, 4)
+  ann$isomer_rank <- ave(-ann$score, grp, FUN = function(v) rank(v, ties.method = "min"))
+  single <- ann$isomer_group_n == 1                            # no isomer: rank 1, score and terms NA
+  ann[single, c("score", "score_noref", "rt_term", "ion_term", "ref_term")] <- NA
+} else {
+  # 1.9.0: no RT / ionization-mode predictions -> no score or rank (both terms would be 0 for every isomer, leaving a
+  # references-only order). The columns are kept, empty; isomer_group_n is still filled.
+  ann[c("score", "score_noref", "rt_term", "ion_term", "ref_term", "isomer_rank")] <- NA_real_
+}
 i <- match(ann_key, ann$key)
 results$isomer_group_n <- ann$isomer_group_n[i]
 results$isomer_rank <- as.integer(ann$isomer_rank[i])
@@ -699,7 +709,7 @@ results$isomer_score_noref <- ann$score_noref[i]
 results$isomer_rt_term <- round(ann$rt_term[i], 4)
 results$isomer_ion_term <- round(ann$ion_term[i], 4)
 results$isomer_ref_term <- round(ann$ref_term[i], 4)
-if (nrow(results) != n_rows_meta || anyNA(results$isomer_rank)) stop("Isomer rank: row count changed or rank missing")
+if (nrow(results) != n_rows_meta || (use_rt_esi && anyNA(results$isomer_rank))) stop("Isomer rank: row count changed or rank missing")
 
 # --- Schymanski level from Confidence (1.6.0); Confidence itself unchanged ---
 # Schymanski et al. 2014 (doi:10.1021/es5002105). Level 4 (molecular formula) is split by the evidence xMSannotator used:
@@ -802,6 +812,7 @@ run_info <- c(
   sprintf("rows with rt_pred_sec: %d (structure %d, formula_members %d) | within window95: %d | not in prediction file: %d",
           sum(!is.na(results$rt_pred_sec)), sum(results$rt_pred_source %in% "structure"), sum(results$rt_pred_source %in% "formula_members"),
           sum(results$rt_pred_within_w95 %in% TRUE), sum(results$rt_esi_no_prediction_reason %in% "not_in_prediction_file")),
+  sprintf("isomer_rank: %s", if (use_rt_esi) "computed" else "not computed (no RT / ionization-mode predictions; rank, score and term columns blank)"),
   sprintf("ms2_features: %s", if (use_ms2) sprintf("%s (md5 %s)", ms2_features_path, unname(tools::md5sum(ms2_features_path))) else "none"),
   sprintf("rows with has_ms2: %d | features with has_ms2: %d", sum(results$has_ms2 %in% TRUE), length(unique(results$feature_id[results$has_ms2 %in% TRUE]))),
   "",
