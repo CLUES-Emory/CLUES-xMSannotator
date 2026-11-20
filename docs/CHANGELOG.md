@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Changed
+- `run_CLUES_xMSannotator.sh` (1.9.1): `#SBATCH --mem=64G` (was 128G); largest measured task 16.3 GB on CLU0162 C18 (all databases, 10 workers, macOS). See `NEWS.md`. (2026-11-20)
+
 ### Documentation
 - `readme.md` Installation (R 4.5.2): step-by-step install of the dependencies (Bioconductor Rdisop, impute, preprocessCore; WGCNA; runscript packages) and of the package from `main` with `remotes::install_github(..., repos = BiocManager::repositories())`, an installation check, tested versions, and the cluster files (runscript location, job script, prediction folder; HILIC without predictions). No code change. (2026-11-20)
 
