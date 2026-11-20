@@ -41,8 +41,10 @@
 # Peak memory per task on CLU0127 (about 10,000 features x 350 injections, confirmed DB):
 # about 4 GB with the Step 1 feature groups, about 10 GB with WGCNA.
 # CLU0162 C18 (1,058 injections; 20,944 / 11,122 features, Step 1 groups, confirmed DB, 10 workers):
-# 13.7 GB / 5.6 GB and under 1 min per task (Mac, run 88).
-#SBATCH --mem=128G
+# 13.7 GB / 5.6 GB and under 1 min per task (Mac, run 88). All databases of a bundle, CLU0162 C18: largest task
+# 16.3 GB (NormanNetwork pos, bundle v261117, run 104) and 13.4 GB (CPDat pos, v261119, run 133); the 10 workers are
+# threads of one R process. 64G (1.9.1, was 128G) leaves 4x that; check sacct MaxRSS on the cluster for larger studies.
+#SBATCH --mem=64G
 #SBATCH --array=1-18
 #SBATCH --error=CLUES_xMSannotator_%A_%a.err
 #SBATCH --output=CLUES_xMSannotator_%A_%a.out

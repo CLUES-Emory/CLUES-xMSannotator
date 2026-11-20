@@ -1,3 +1,14 @@
+# CLUES.xMSannotator 1.9.1
+
+## Job script: 64 GB per task (was 128 GB)
+
+* `run_CLUES_xMSannotator.sh`: `#SBATCH --mem=64G`. The largest measured task
+  for all databases of a bundle on CLU0162 C18 (1,058 injections, Step 1
+  feature groups, 10 workers) peaked at 16.3 GB (NormanNetwork pos, bundle
+  v261117) and 13.4 GB (CPDat pos, v261119), measured on macOS. The 10 workers
+  are threads of one R process. 128 GB per array task reserved about 2.8 TB
+  for a 22-task bundle. No other change.
+
 # CLUES.xMSannotator 1.9.0
 
 ## MultiDB runscript: no isomer rank without RT / ionization-mode predictions
