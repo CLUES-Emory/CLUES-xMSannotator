@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file. From 1.1.0, release notes by version are in [`NEWS.md`](../NEWS.md).
 
+### Documentation
+- `readme.md` Installation (R 4.5.2): step-by-step install of the dependencies (Bioconductor Rdisop, impute, preprocessCore; WGCNA; runscript packages) and of the package from `main` with `remotes::install_github(..., repos = BiocManager::repositories())`, an installation check, tested versions, and the cluster files (runscript location, job script, prediction folder; HILIC without predictions). No code change. (2026-11-20)
+
 ### Changed
 - MultiDB runscript (1.9.0): without RT / ionization-mode predictions (`rt_esi_prediction_dir` not set) the isomer score is not computed; `isomer_rank`, `isomer_score`, `isomer_score_noref` and the three term columns are blank, `isomer_group_n` still filled (before: a references-only rank). Unchanged with predictions. `run_info.txt` line `isomer_rank:`. See `NEWS.md`. (2026-11-20)
 

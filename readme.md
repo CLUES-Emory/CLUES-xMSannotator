@@ -122,13 +122,91 @@ Bug fixes, new features, and code cleanup were completed using [Claude Code](htt
 - Removed unused `ISgroup` column, redundant `time.y` column, redundant `forms_valid_adduct_pair` filter, and `remove_tmp_files()` auto-cleanup
 - Added roxygen2 documentation to 13 exported functions that lacked man pages
 
-## Installation
+## Installation (R 4.5.2)
 
-The package can be installed from GitHub:
+The SLURM wrapper `run_CLUES_xMSannotator.sh` runs `module load R/4.5.2`. Install into that R from an interactive session
+on the cluster:
+
+```bash
+srun -p clues -c 1 -n 1 --mem 32000 --pty bash
+module load R/4.5.2
+R
+```
+
+Without write access to the site library, `install.packages()` offers to create a personal library. The SLURM jobs must
+see the same library, which they do when it is your account's default `R_LIBS_USER`.
 
 ```r
-devtools::install_github("CLUES-Emory/CLUES-xMSannotator")
+# 1. Installers
+install.packages(c("BiocManager", "remotes"))
+
+# 2. Dependencies. From Bioconductor: Rdisop (used by the package) and impute and preprocessCore (needed by WGCNA).
+#    BiocManager uses Bioconductor 3.22 for R 4.5 and also installs WGCNA and its CRAN dependencies.
+BiocManager::install(c("Rdisop", "impute", "preprocessCore", "WGCNA"), update = FALSE, ask = FALSE)
+
+# 3. Packages the MultiDB runscript loads
+install.packages(c("readxl", "writexl", "data.table", "dplyr", "tibble"))
+
+# 4. CLUES.xMSannotator from main. The repo is public, so no token is needed.
+#    Any remaining dependencies come from CRAN and Bioconductor.
+remotes::install_github("CLUES-Emory/CLUES-xMSannotator", ref = "main",
+                        repos = BiocManager::repositories(), upgrade = "never")
 ```
+
+To update the package, run step 4 again; it reinstalls when `main` has moved.
+
+**Compilers.** On Linux the packages are built from source. The package (`src/match_by_mass.cpp`, Rcpp) and Rdisop need
+a C++ compiler. **UNVERIFIED:** that one is on the PATH after `module load R/4.5.2` on the cluster.
+
+Check the installation in the same R:
+
+```r
+p <- c("CLUES.xMSannotator", "WGCNA", "Rdisop", "impute", "preprocessCore", "enviPat", "Rcpp",
+       "dplyr", "tibble", "readxl", "writexl", "data.table")
+v <- vapply(p, function(x) tryCatch(as.character(packageVersion(x)), error = function(e) "MISSING"), "")
+print(data.frame(package = p, version = v), row.names = FALSE)
+library(CLUES.xMSannotator)   # loads without error
+packageDescription("CLUES.xMSannotator")$RemoteSha   # the main commit that was installed
+```
+
+### Tested versions
+
+R 4.5.2 on macOS (5-Test_Output run 133):
+
+| Package | Version |
+|---|---|
+| CLUES.xMSannotator | 1.9.0 |
+| WGCNA | 1.73 |
+| Rdisop | 1.70.0 |
+| impute | 1.84.0 |
+| preprocessCore | 1.72.0 |
+| enviPat | 2.6 |
+| Rcpp | 1.1.2 |
+| dplyr | 1.1.4 |
+| tibble | 3.3.0 |
+| readxl | 1.4.5 |
+| writexl | 1.5.4 |
+| data.table | 1.17.8 |
+
+- **WGCNA:** CRAN now has 1.74, which no longer imports GO.db or AnnotationDbi. It was not tested here.
+- **Dependency resolution:** the package's dependencies resolve from CRAN plus Bioconductor 3.22 (78 hard dependencies,
+  none missing).
+- **Step 4:** checked on 2026-11-20 on macOS, installing into an empty library (the dependencies came from the
+  existing system library, so steps 1-3 were not rerun from scratch). It installed 1.9.0 at commit d462dbf.
+
+### Running on the cluster
+
+- **Runscript.** The wrapper calls `r_script`, which is `/clues/~Data_Extraction/xMSannotator/xMSannotator_CLUES_MultiDB_Runscript.R`.
+  Copy `inst/scripts/xMSannotator_CLUES_MultiDB_Runscript.R` there from the same commit as the installed package.
+  `run_info.txt` records the package version and the runscript's md5.
+- **Job script.** Copy `run_CLUES_xMSannotator.sh` for each study and edit its USER CONFIGURATION block.
+- **RT and ionization-mode predictions.** These are data files, not R packages. Set `rt_esi_prediction_dir` to the copy
+  of the reference library's `predictions/<release>/xmsannotator_<bundle>/` folder that matches the database bundle.
+  - The predictions are C18 only. For HILIC, keep `rt_esi_prediction_dir=""`: the runscript stops if the folder is set
+    and has no file for the mode.
+  - Without predictions, the isomer rank and score columns are blank (1.9.0).
+- **Not needed on the cluster:** Java and Python. They are only needed to build the predictions, which happens on a
+  local machine.
 
 See the [Example Runscript](inst/scripts/xMSannotator_CLUES_Runscript_Example.R) for a complete working example, and the [Input File Formats](docs/xMSannotator_Input_Formats.md) guide for all parameter details.
 
