@@ -1,3 +1,21 @@
+# CLUES.xMSannotator 1.9.2
+
+## MultiDB runscript: the generated README describes every xlsx column
+
+* The mode README (`<mode>-<study>_xMSannotator_README.md`) has a new section,
+  "xlsx columns": every column of the xlsx in file order, with its source
+  (xMSannotator, database, runscript, Step 1) and content. The feature table
+  QA columns are listed by name as joined in this run, with the Step 1 README
+  that describes them. Before, the README described only the columns the
+  runscript adds and pointed to `docs/Stage5_Output_Reference.md`, which is
+  not in the delivery package and does not list `peak` or `n_rt_clusters`.
+* The "Files" bullets no longer point to the repository docs for the columns,
+  and say that the DB file's `name`, `molecular_formula` and
+  `monoisotopic_mass` are `Name`, `Formula` and `MonoisotopicMass` in the xlsx.
+* The list of joined feature table QA columns is defined once, before the
+  README, and used by both. The xlsx, `run_info.txt` contents other than md5s
+  and versions, and the Stage files are unchanged.
+
 # CLUES.xMSannotator 1.9.1
 
 ## Job script: 64 GB per task (was 128 GB)
