@@ -1,7 +1,7 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-11-20 (CLUES.xMSannotator 1.9.0)
+# Date: 2026-11-22 (CLUES.xMSannotator 1.9.2)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
 # Output: <output_dir>/<mode>/7-<mode>_<study>_xMSannotator/
@@ -453,6 +453,21 @@ settings_lines <- sprintf("| %s | %s |", names(settings), vapply(settings, fmt_s
 # adduct_weights depends on the database (bare-ion pseudo-adducts [M]+ ... for charged compounds): run_info.txt only
 db_settings <- list(adduct_weights = adduct_weights)
 
+# Feature table QA columns joined to the xlsx (Section 8) and listed in the README. Names from Step 1 v1.6.0+ and from
+# earlier versions; intersect() keeps those present in this table.
+metadata_cols <- c("feature_id", "rtmin", "rtmax", "n_detected", "n_filled",
+                   "rt_range_10_90", "mz_range_ppm", "median_snr_asari",
+                   "frac_no_baseline", "median_dppm", "median_width", "median_n_scans",
+                   "Water_fc", "Water_status", "Overall_detected_pct",
+                   "Overall_nonzero_pct", "Study_Sample_detected_pct",
+                   # before Step 1 v1.6.0
+                   "peak_quality", "alignment_score", "combined_score", "quality_category",
+                   "peak_shape", "passed_filter", "Overall_detect_pct", "Study_Sample_detect_pct")
+# Also include any _CV columns (names vary by study, e.g., HRE.p1Std._CV, Study_Sample_CV)
+cv_cols <- grep("_CV$", colnames(feature_table), value = TRUE, ignore.case = TRUE)
+metadata_cols <- unique(c(metadata_cols, cv_cols))
+qa_cols <- setdiff(intersect(metadata_cols, colnames(feature_table)), "feature_id")
+
 # --- Step-folder README: same content from every task of this mode (no task-specific values or times);
 #     written to a temporary file and renamed, so tasks running at the same time never leave a partial file ---
 readme_path <- file.path(step_dir, paste0(lc_mode, "-", study_id, "_xMSannotator_README.md"))
@@ -473,11 +488,12 @@ readme <- c(
   "A database folder with no xlsx, or with uncompressed `intermediate/*.txt`, is from a task that did not finish.", "",
   "## Files",
   sprintf("- **xlsx**: `%s` (one row per compound x adduct or isotope x feature) joined with the database METADATA file", final_stage),
-  "  (by `compound_id`), the feature table QA columns (by `feature_id`) and the Step 1 `feature_group`. Column reference:",
-  "  `docs/Stage5_Output_Reference.md` and `docs/xMSannotator_Workflow.md` of CLUES-xMSannotator.",
+  "  (by `compound_id`), the feature table QA columns (by `feature_id`) and the Step 1 `feature_group`. Every column:",
+  "  section \"xlsx columns\" below. Method: `docs/xMSannotator_Workflow.md` of CLUES-xMSannotator.",
   "- **DATA_DICTIONARY.md**: the database's own columns (the DB file's and the METADATA file's), copied unchanged from",
-  "  the folder of the METADATA file (the library folder of the bundle). The other xlsx columns are described here and in",
-  "  the column reference above. A library folder without the file gives no copy (`run_info.txt`: `data_dictionary: none`).",
+  "  the folder of the METADATA file (the library folder of the bundle). The DB file's `name`, `molecular_formula` and",
+  "  `monoisotopic_mass` are `Name`, `Formula` and `MonoisotopicMass` in the xlsx. The other xlsx columns are described",
+  "  below. A library folder without the file gives no copy (`run_info.txt`: `data_dictionary: none`).",
   "- **intermediate/** (tab-separated, gzipped):",
   "  `Stage1_mass_matched` (mass matches), `Stage1_peak_clusters` (feature groups or WGCNA modules; same for every database),",
   "  `Stage2_isotope_detection`, `Stage3_chemical_scores`, `Stage3_pathway_*`, `Stage4_confidence_levels`,",
@@ -495,6 +511,44 @@ readme <- c(
   sprintf("- MS2 features (Step 1 Stage 4): `%s`", if (use_ms2) ms2_features_path else "none"),
   sprintf("- RT / ionization-mode predictions: %s", if (use_rt_esi) sprintf("`%s` (md5 %s; window95 %.2f s, void %s s)", rt_esi_file,
           unname(tools::md5sum(rt_esi_file)), rt_window95, rt_void) else "none"), "",
+  "## xlsx columns",
+  "One row per compound x adduct or isotope x feature, columns in file order. Score and confidence compare candidates",
+  "within one database only. A blank cell is a missing value.", "",
+  "| Column | Source | Content |", "|---|---|---|",
+  "| `compound_id` | database | the compound's key in the database's DB and METADATA files |",
+  "| `Confidence` | xMSannotator Stage 4 | 0-4. 4: user-confirmed (`boosted_compounds`); 3: isotope rows and an adduct, module and RT coherent; 2: two or more adducts, coherent; 1: a single primary adduct (M+H / M-H); 0: none of these (e.g. a single other adduct) |",
+  "| `schymanski_level` | runscript | `Confidence` on the Schymanski scale (section \"Schymanski level\") |",
+  "| `score` | xMSannotator Stage 3 | chemical score: evidence from the adducts found, their intensity correlation (`correlation_threshold`), isotope peaks and the adduct weights. Higher = more evidence; not a probability |",
+  sprintf("| `Module_RTclust` | xMSannotator | `<module>_<RT cluster>`: the features of one module co-vary and co-elute. %s |",
+          if (use_feature_groups) "This run: the module is the Step 1 feature group (`feature_group`) and the RT cluster is always 1"
+          else "This run: WGCNA modules, sub-clustered by RT (no Step 1 feature groups)"),
+  "| `mz` | Step 1 feature table | the feature's m/z |",
+  "| `time` | Step 1 feature table | the feature's retention time, seconds |",
+  "| `MatchCategory` | xMSannotator Stage 1 | `Multiple`: the feature's m/z matched more than one compound x adduct of this database; `Unique`: one |",
+  "| `theoretical.mz` | xMSannotator Stage 1-2 | m/z expected for the compound as this adduct (isotope rows: as this isotope peak) |",
+  "| `delta_ppm` | xMSannotator | 1e6 x abs(`theoretical.mz` - `mz`) / `theoretical.mz`, 2 decimals, no sign |",
+  "| `Name`, `Formula`, `MonoisotopicMass` | database DB file | its `name`, `molecular_formula` and `monoisotopic_mass` (Da) |",
+  "| `Adduct` | xMSannotator | the adduct (setting `selected_adducts`; `[M]+` / `[M]-`: a permanently charged compound as the bare ion). Suffix `_[+n]`: isotope peak n mass units above that adduct's monoisotopic ion |",
+  "| `mean_int_vec` | xMSannotator | mean intensity of the feature over the injections annotated (the sample mapfile without the blank sample types; feature table values, gap-filled included) |",
+  "| `MD` | xMSannotator | mass-defect bin written as `0.<bin>`, bin = (fractional part of `mz`) / `mass_defect_precision` rounded up (m/z 141.0715: bin 8, `0.8`). A label, not the mass defect: bins 8 and 80 are both `0.8` |",
+  "| `peak` | xMSannotator | xMSannotator's own feature number (rank by m/z, then RT); one per `feature_id` |",
+  "| `isotopologue` | xMSannotator Stage 4 | isotope substitution of an isotope row (e.g. `13C:1`); blank on monoisotopic rows |",
+  "| `isotopologue_quality` | xMSannotator Stage 4 | `confirmed`: m/z and intensity ratio fit the expected pattern; `mz_only`: the m/z fits, the intensity does not; blank on monoisotopic rows |",
+  "| `Confidence_Level` | xMSannotator | `Confidence` in words: 0 None, 1 Low, 2 Medium, 3 High, 4 Confirmed |",
+  "| `rt_cluster` | xMSannotator Stage 4 | which of the compound's RT clusters the row is in (clusters of its matched features no wider than `time_tolerance`, numbered from the earliest). One annotation = (`compound_id`, `rt_cluster`): a compound can be annotated at several RTs (`multi_rt_clusters`) |",
+  "| `feature_id` | Step 1 feature table | the feature's ID in every Step 1 table (`Feature ID` in the Steps 2-3 CSV files) |",
+  "| `n_rt_clusters` | xMSannotator | RT clusters among the compound's mass matches before scoring. 1: matched at one RT only; more: the annotation is the best of several candidate peaks, so a chance match is more likely |",
+  "| `rt_pred_sec` ... `rt_pred_within_w95` (9 columns) | runscript, RT / ionization-mode predictions | section \"Columns added to the Stage 4b rows\" |",
+  "| `ms2_status` ... `ms2_spectrum_method` (6 columns) | runscript, Step 1 Stage 4 | same section |",
+  "| the METADATA columns | database METADATA file | every column except `compound_id`, in that file's order: `DATA_DICTIONARY.md` in the database folder |",
+  "| `isomer_group_n` ... `isomer_ref_term` (7 columns) | runscript | section \"Isomer score and rank\" |",
+  sprintf("| %s | Step 1 feature table | the feature's quality columns, from the uncorrected (Unadjusted) feature table read (Inputs): described in the Step 1 README `2-%s_%s_BatchCorrection/%s-%s_BatchCorrection_README.md`. The `_CV` columns are of the uncorrected intensities |",
+          if (length(qa_cols)) paste0("`", qa_cols, "`", collapse = ", ") else "(none in this feature table)",
+          lc_mode, study_id, lc_mode, study_id),
+  if (use_feature_groups) sprintf(
+    "| `feature_group` | Step 1 Stage 3 | the feature's group: `3-%s_%s_Feature_Grouping/%s-%s_Feature_Groups_README.md` |",
+    lc_mode, study_id, lc_mode, study_id),
+  "",
   "## Columns added to the Stage 4b rows (before the METADATA and feature joins)",
   "Confidence, score and the rows are unchanged; these columns are information only.",
   "- `rt_pred_sec`: predicted RT of the compound (formula rows, e.g. HMDB `HMF_`: median of the member structures);",
@@ -720,19 +774,7 @@ schymanski_level <- unname(schymanski_map[as.character(results$Confidence)])
 if (anyNA(schymanski_level)) stop("Schymanski level: Confidence outside 0-4")
 results <- tibble::add_column(results, schymanski_level = schymanski_level, .after = "Confidence")
 
-# Merge feature table QA metadata. Names from Step 1 v1.6.0+ and from earlier
-# versions; intersect() below keeps those present in this table.
-metadata_cols <- c("feature_id", "rtmin", "rtmax", "n_detected", "n_filled",
-                   "rt_range_10_90", "mz_range_ppm", "median_snr_asari",
-                   "frac_no_baseline", "median_dppm", "median_width", "median_n_scans",
-                   "Water_fc", "Water_status", "Overall_detected_pct",
-                   "Overall_nonzero_pct", "Study_Sample_detected_pct",
-                   # before Step 1 v1.6.0
-                   "peak_quality", "alignment_score", "combined_score", "quality_category",
-                   "peak_shape", "passed_filter", "Overall_detect_pct", "Study_Sample_detect_pct")
-# Also include any _CV columns (names vary by study, e.g., HRE.p1Std._CV, Study_Sample_CV)
-cv_cols <- grep("_CV$", colnames(feature_table), value = TRUE, ignore.case = TRUE)
-metadata_cols <- unique(c(metadata_cols, cv_cols))
+# Merge feature table QA metadata (metadata_cols: defined before the README, 1.9.2)
 feature_metadata <- feature_table[, intersect(metadata_cols, colnames(feature_table))]
 feature_metadata <- unique(feature_metadata)
 results <- left_join(results, feature_metadata, by = "feature_id")
