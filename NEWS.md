@@ -1,3 +1,12 @@
+# CLUES.xMSannotator 1.9.3
+
+## MultiDB runscript: no internal test-run number in the generated README
+
+* The isomer-score bullet of the mode README said "Weights from run 97", a CLUES
+  test-run number that means nothing to a recipient of a data delivery. It now
+  reads "Weights calibrated on CLU0162 C18 (out-of-fold; ...)". No other change;
+  the xlsx is identical (PFAS pos, 1.9.2 vs 1.9.3, 4,045 rows).
+
 # CLUES.xMSannotator 1.9.2
 
 ## MultiDB runscript: the generated README describes every xlsx column

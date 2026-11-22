@@ -1,7 +1,7 @@
 ###############################################################################
 # xMSannotator CLUES Multi-Database SLURM Run Script
 # Uses: CLUES.xMSannotator::advanced_annotation()
-# Date: 2026-11-22 (CLUES.xMSannotator 1.9.2)
+# Date: 2026-11-22 (CLUES.xMSannotator 1.9.3)
 # Note: Designed for SLURM array jobs with database mapfile support
 #       Run via: run_CLUES_xMSannotator.sh
 # Output: <output_dir>/<mode>/7-<mode>_<study>_xMSannotator/
@@ -576,7 +576,7 @@ readme <- c(
   "- Without RT / ionization-mode predictions (`rt_esi_prediction_dir` not set) the score is not computed: `isomer_rank`,",
   "  `isomer_score`, `isomer_score_noref` and the three term columns are blank; `isomer_group_n` is still filled.",
   sprintf("  This run: %s.", if (use_rt_esi) "predictions given, rank and score computed" else "no predictions, rank and score columns blank"),
-  "- Information only: confidence, score and rows are unchanged. Weights from run 97 (CLU0162 C18, out-of-fold; truth =",
+  "- Information only: confidence, score and rows are unchanged. Weights calibrated on CLU0162 C18 (out-of-fold; truth =",
   "  Level 1 standards and Level 2a MS2 matches, both well-studied compounds). `total_references` is a popularity prior,",
   "  not evidence about the feature; use `isomer_score_noref` where that should not count.", "",
   "## Schymanski level (column after `Confidence`)",
